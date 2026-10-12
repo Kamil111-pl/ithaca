@@ -83,7 +83,7 @@ CHECKS: dict[str, tuple[tuple[str, ...], Callable[[dict, dict], bool]]] = {
     "tool_not_called": (("name",), lambda c, r: c["name"] not in r["calls"]),
     "max_tool_calls": (("n",), lambda c, r: len([x for x in r["calls"] if x not in ("tool_search", "update_plan")]) <= c["n"]),
     "no_approval_requested": ((), lambda c, r: not r["approvals"]),
-    "no_error": ((), lambda c, r: r["status"] == "completed"),
+    "no_error": ((), lambda c, r: r["status"] in ("done", "completed")),
     # answer
     "answer_contains": (("any",), lambda c, r: any(_has(r["answer"], s) or s.lower() in _num_norm(r["answer"]) for s in c["any"])),
     "answer_not_contains": (("any",), lambda c, r: not any(_has(r["answer"], s) for s in c["any"])),

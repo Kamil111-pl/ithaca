@@ -74,8 +74,20 @@ async def test_untrusted_content_requires_approval_for_writes(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_unloaded_tool_is_rejected(monkeypatch):
+async def test_unloaded_real_tool_is_loaded_on_use(monkeypatch):
     fake = FakeProvider([[call("write_file", {"path": "a", "content": "b"}, "t1")], [{"type": "text", "text": "ok"}]])
+    cid = _setup(monkeypatch, fake)
+    await _run(cid, "go")
+    rows = events.list_for(cid)
+    results = [r for r in rows if r["type"] == "tool_result"]
+    assert not results[0]["data"]["is_error"]
+    assert (config.WORKSPACE_DIR / "a").read_text() == "b"
+    assert any(r["type"] == "tools_loaded" and "write_file" in r["data"]["loaded"] for r in rows)
+
+
+@pytest.mark.asyncio
+async def test_unknown_tool_is_rejected(monkeypatch):
+    fake = FakeProvider([[call("teleport", {}, "t1")], [{"type": "text", "text": "ok"}]])
     cid = _setup(monkeypatch, fake)
     await _run(cid, "go")
     results = [r for r in events.list_for(cid) if r["type"] == "tool_result"]

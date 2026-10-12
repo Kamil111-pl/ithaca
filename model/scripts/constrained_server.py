@@ -7,8 +7,12 @@ a tool call (Qwen's `<tool_call>` token) every following token is masked so
 the call must be
 
     <tool_call>
-    {"name": "<one of the request's tools>", "arguments": <JSON matching that tool's schema>}
+    {"name": "<a real tool>", "arguments": <JSON matching that tool's schema>}
     </tool_call>
+
+"A real tool" is any tool in the request's `ithaca_grammar_tools` field (Ithaca
+sends all of its tools there; the prompt describes only the loaded ones), or
+else in `tools`.
 
 The masks come from llguidance (MIT) and are applied on the GPU. Requests
 without tools, and models without Qwen-style tool tokens, are untouched.
@@ -163,13 +167,23 @@ class ToolCallConstraint:
 
 _orig_make_lp = server._make_logits_processors
 _orig_generate = server.ResponseGenerator.generate
+_orig_handle = server.APIHandler.handle_completion
+
+
+def _handle_completion(self, request, stop_words):
+    # Ithaca sends every real tool in `ithaca_grammar_tools` (the prompt only
+    # describes the loaded ones); calls may name any of them.
+    extra = self.body.get("ithaca_grammar_tools") if isinstance(self.body, dict) else None
+    if extra and getattr(request, "tools", None):
+        request.ithaca_grammar_tools = extra
+    return _orig_handle(self, request, stop_words)
 
 
 def _generate(self, request, args, *a, **kw):
     # Hand the request's tools and the tokenizer to the logits-processor factory.
     # The model loads lazily in the generation thread, so pass the provider and
     # read its tokenizer when the logits processors are made (in that thread).
-    args.ithaca_tools = getattr(request, "tools", None) or []
+    args.ithaca_tools = getattr(request, "ithaca_grammar_tools", None) or getattr(request, "tools", None) or []
     args.ithaca_provider = self.model_provider
     return _orig_generate(self, request, args, *a, **kw)
 
@@ -194,6 +208,7 @@ def _make_logits_processors(args):
 def install() -> None:
     server._make_logits_processors = _make_logits_processors
     server.ResponseGenerator.generate = _generate
+    server.APIHandler.handle_completion = _handle_completion
 
 
 if __name__ == "__main__":

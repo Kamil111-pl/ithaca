@@ -458,12 +458,15 @@ async def _run_tool(live: LiveRun, ctx: ToolContext, call: dict[str, Any], backe
 
     result: ToolResult
     available = tool is not None and (tool.core or name in ctx.loaded or settings.get("agent.tool_loading") == "all")
+    if tool is not None and not available and not call.get("parse_error"):
+        # The model named a real tool it hadn't loaded: its intent is clear, so load
+        # it rather than bouncing it back to tool_search (approvals still apply below).
+        ctx.loaded.add(name)
+        events.append(conv, live.id, "tools_loaded", {"loaded": [name]})
     if call.get("parse_error"):
         result = ToolResult(call["parse_error"], is_error=True)
     elif tool is None:
         result = ToolResult(f"There is no tool named '{name}'. Use tool_search to find tools.", is_error=True)
-    elif not available:
-        result = ToolResult(f"'{name}' is not loaded. Call tool_search first.", is_error=True)
     elif (problem := validate_args(tool.parameters, args)) is not None:
         result = ToolResult(problem, is_error=True)
     else:

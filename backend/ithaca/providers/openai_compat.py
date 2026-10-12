@@ -21,6 +21,9 @@ from .base import Message, ModelInfo, ProviderError, StreamEvent, ToolSpec
 from .tagstream import TagStream
 
 
+LOCAL_PREFIXES = ("http://127.0.0.1:", "http://localhost:")
+
+
 class OpenAICompatProvider:
     kind = "openai"
 
@@ -109,6 +112,13 @@ class OpenAICompatProvider:
         if tools:
             body["tools"] = self.tools_to_wire(tools)
             body["tool_choice"] = "auto"
+            if self.base_url.startswith(LOCAL_PREFIXES):
+                # Ithaca's own model server constrains tool calls to a grammar. Let it
+                # accept any real tool (the runner loads unloaded ones on use), not just
+                # the ones described in this prompt, or the model is forced onto a wrong one.
+                from ..tools.registry import registry
+
+                body["ithaca_grammar_tools"] = self.tools_to_wire([t.spec() for t in registry.all()])
 
         partial: dict[int, dict[str, Any]] = {}
         usage: dict[str, int] = {}
