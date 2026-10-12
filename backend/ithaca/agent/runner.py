@@ -16,7 +16,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator
 
-from .. import db, events, local_servers, providers, sandbox, security, settings
+from .. import db, events, local_servers, procedures, providers, sandbox, security, settings
 from ..providers.base import ProviderError
 from ..tools.registry import ToolContext, ToolResult, registry, validate_args
 from . import prompts
@@ -201,6 +201,7 @@ async def _execute(live: LiveRun, user_text: str, provider_id: str, model: str,
             vision = provider_row["kind"] == "anthropic"
         window = _context_window(provider_row, model)
 
+        procedures.note_feedback(conv, user_text)  # a complaint counts against the last run's procedure
         context = await prompts.turn_context(user_text, document_id)
         user_eid = events.append(conv, live.id, "user_message", {"content": user_text, "context": context})
         await live.publish({"type": "user_message", "event_id": user_eid, "content": user_text})
@@ -364,6 +365,11 @@ async def _execute(live: LiveRun, user_text: str, provider_id: str, model: str,
             payload["error"] = error_message
             events.append(conv, live.id, "error", {"message": error_message})
         events.append(conv, live.id, "run_finished", payload)
+        if status == "done":
+            try:
+                await procedures.record(conv, live.id, user_text)
+            except Exception:  # noqa: BLE001 - learning is best-effort
+                log.exception("could not record procedure for run %s", live.id)
         live.done = True
         await live.publish({"type": "run_finished", **payload})
 

@@ -1,4 +1,4 @@
-import { Brain, Check, Pencil, Plus, Search, ShieldAlert, Trash2, X } from "lucide-react";
+import { Brain, Check, ListChecks, Pencil, Plus, Search, ShieldAlert, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Glass } from "../components/Glass";
 import { api } from "../lib/api";
@@ -75,7 +75,47 @@ export function MemoryView() {
           </Glass>
         ))}
         {items && !items.length && <p className="muted" style={{ textAlign: "center", padding: 30 }}>{q ? "No memories match." : "No memories yet. Ithaca saves useful facts as you chat."}</p>}
+
+        <Procedures />
       </div>
     </div>
+  );
+}
+
+interface Procedure {
+  id: string;
+  steps: string;
+  requests: string[];
+  successes: number;
+  failures: number;
+  updated_at: number;
+}
+
+/** Tool steps Ithaca learned from tasks that worked; shown as examples for similar requests. */
+function Procedures() {
+  const [items, setItems] = useState<Procedure[] | null>(null);
+  const load = () => api.get<Procedure[]>("/api/procedures").then(setItems).catch(() => setItems([]));
+  useEffect(() => {
+    load();
+  }, []);
+  if (!items?.length) return null;
+  return (
+    <>
+      <h3 className="page-title" style={{ fontSize: 16, lineHeight: "34px", fontWeight: 400, margin: "28px 0 2px" }}>Learned procedures</h3>
+      <p className="page-sub" style={{ marginBottom: 14 }}>Steps from tasks that worked, reused for similar requests. What was typed or written is never kept.</p>
+      {items.map((p) => (
+        <Glass thin key={p.id} className="memory-item">
+          <ListChecks size={18} className="faint" />
+          <div className="content">
+            <div>“{p.requests[0]}”{p.requests.length > 1 && <span className="faint"> and {p.requests.length - 1} similar</span>}</div>
+            <div className="mono faint" style={{ marginTop: 4, wordBreak: "break-word" }}>{p.steps}</div>
+            <div className="faint" style={{ fontSize: 12, marginTop: 4 }}>
+              Worked {p.successes}×{p.failures ? ` · failed ${p.failures}×` : ""} · {relTime(p.updated_at)}
+            </div>
+          </div>
+          <button className="icon-btn" aria-label="Forget this procedure" onClick={async () => { await api.del(`/api/procedures/${p.id}`); load(); }}><Trash2 size={16} /></button>
+        </Glass>
+      ))}
+    </>
   );
 }

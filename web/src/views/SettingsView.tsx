@@ -214,6 +214,9 @@ function AgentSettings() {
       <Row title="Max steps per message">
         <input className="input" type="number" min={1} max={100} style={{ width: 90 }} value={Number(settings["agent.max_rounds"] ?? 24)} onChange={(e) => saveSettings({ "agent.max_rounds": Number(e.target.value) || 24 })} />
       </Row>
+      <Row title="Learn from tasks that worked" hint="Reuses the steps of successful tasks for similar requests. See them under Memory.">
+        <Switch on={Boolean(settings["agent.learn_procedures"] ?? true)} onChange={(v) => saveSettings({ "agent.learn_procedures": v })} />
+      </Row>
       <Row title="Recall memories automatically">
         <Switch on={Boolean(settings["memory.auto_recall"] ?? true)} onChange={(v) => saveSettings({ "memory.auto_recall": v })} />
       </Row>

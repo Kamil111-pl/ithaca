@@ -11,7 +11,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from .. import documents, memory, settings
+from .. import documents, memory, procedures, settings
 from ..security import UNTRUSTED_POLICY, wrap_untrusted
 from ..tools.registry import Tool
 
@@ -63,6 +63,12 @@ async def turn_context(user_text: str, document_id: str | None) -> str:
         if tainted:
             lines.append(wrap_untrusted("memories saved while reading web content",
                                         "\n".join(f"- {m['content']}" for m in tainted)))
+    try:
+        block = procedures.prompt_block(await procedures.recall(user_text))
+    except Exception:  # noqa: BLE001 - best-effort
+        block = ""
+    if block:
+        lines.append(block)
     if document_id:
         doc = documents.get(document_id)
         if doc:

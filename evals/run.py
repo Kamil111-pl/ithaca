@@ -4,6 +4,7 @@
     ./ithaca eval --only gdoc-essay,mail-reply       # a few tasks
     ./ithaca eval --category browser --repeat 3      # flakiness: pass rate over 3 attempts each
     ./ithaca eval --split dev                        # tasks you may look at while tuning
+    ./ithaca eval --learn                            # learned procedures: dev tasks teach, holdout tasks measure
     ./ithaca eval --kind anthropic --model claude-opus-5-5   # reference run (ANTHROPIC_API_KEY)
     python evals/run.py --validate                   # check tasks.json (CI does this)
 
@@ -161,6 +162,23 @@ def validate(tasks: list[dict]) -> list[str]:
 
 # ------------------------------------------------------------------ run
 
+LEARNED: list[dict] = []  # procedures carried between tasks in --learn mode
+
+
+def _carry_in() -> None:
+    from ithaca import db
+
+    for row in LEARNED:
+        cols = ", ".join(row)
+        db.execute(f"INSERT OR REPLACE INTO procedures ({cols}) VALUES ({', '.join('?' * len(row))})", tuple(row.values()))
+
+
+def _carry_out() -> None:
+    from ithaca import db
+
+    LEARNED[:] = db.query("SELECT * FROM procedures")
+
+
 async def run_task(task: dict, args) -> dict:
     from ithaca import config, db, documents, events, memory, providers, settings, web
     from ithaca.agent.runner import manager
@@ -175,6 +193,9 @@ async def run_task(task: dict, args) -> dict:
     settings.set("agent.max_rounds", args.max_rounds)
     settings.set("agent.tool_loading", args.tool_loading)
     settings.set("browser.target", "auto")
+    settings.set("agent.learn_procedures", bool(args.learn))
+    if args.learn:
+        _carry_in()
     if args.kind == "anthropic":
         providers.create("Eval", "anthropic", api_key=os.environ.get("ANTHROPIC_API_KEY", ""), default_model=args.model,
                          models=[{"id": args.model, "tools": True, "context": 1_000_000}], provider_id="eval")
@@ -241,6 +262,8 @@ async def run_task(task: dict, args) -> dict:
         watcher.cancel()
     elapsed = time.monotonic() - started
     sim_mac.uninstall()
+    if args.learn and task.get("split", "dev") == "dev":
+        _carry_out()  # only dev tasks teach; holdout tasks are only measured
 
     rows = events.list_for(cid)
     calls = [c["name"] for r in rows if r["type"] == "assistant_message" for c in r["data"].get("tool_calls") or []]
@@ -320,6 +343,8 @@ async def main_async(args) -> int:
         print("\n".join(errors))
         return 2
     tasks = _select(tasks, args)
+    if args.learn:  # learn on dev tasks first, then measure holdout tasks with what was learned
+        tasks = [t for t in tasks if t.get("split", "dev") == "dev"] + [t for t in tasks if t.get("split") == "holdout"]
     report = []
     for t in tasks:
         attempts = []
@@ -346,6 +371,9 @@ async def main_async(args) -> int:
           + (f" × {args.repeat} attempts" if args.repeat > 1 else "")
           + f" · {sum(r['pass_rate'] == 1 for r in report)} always pass")
     print("  " + " · ".join(f"{c} {100*sum(v)/len(v):.0f}%" for c, v in sorted(by_cat.items())))
+    hold = [r["pass_rate"] for r in report if r["split"] == "holdout"]
+    if hold:
+        print(f"  holdout: {100*sum(hold)/len(hold):.1f}% over {len(hold)} tasks" + (f" · {len(LEARNED)} procedures learned" if args.learn else ""))
 
     REPORTS.mkdir(exist_ok=True)
     out = REPORTS / f"{time.strftime('%Y%m%d-%H%M%S')}-{args.model.replace('/', '_')}.json"
@@ -383,6 +411,8 @@ def main() -> None:
     ap.add_argument("--baseline", default="", help="report to compare with (default: previous report for this model)")
     ap.add_argument("--no-compare", action="store_true")
     ap.add_argument("--tolerance", type=float, default=3.0, help="allowed drop in pass rate, in points")
+    ap.add_argument("--learn", action="store_true",
+                    help="learned procedures on: dev tasks run first and teach, holdout tasks use what was learned")
     ap.add_argument("--validate", action="store_true", help="only check tasks.json")
     ap.add_argument("-v", "--verbose", action="store_true", help="show failed checks")
     sys.exit(asyncio.run(main_async(ap.parse_args())))

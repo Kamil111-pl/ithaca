@@ -23,6 +23,7 @@ DEFAULTS: dict[str, Any] = {
     # Tools auto-loaded per request (tool-search mode) and sampling for local models.
     "agent.preload_tools": 6,
     "agent.local_temperature": 0.3,
+    "agent.learn_procedures": True,
     # Inject the most relevant memories into each turn.
     "memory.auto_recall": True,
     # auto | seatbelt | docker | off

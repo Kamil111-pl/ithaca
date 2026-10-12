@@ -527,6 +527,22 @@ class MemoryBody(BaseModel):
     tags: list[str] = []
 
 
+@app.get("/api/procedures")
+async def list_procedures() -> list[dict[str, Any]]:
+    from . import procedures
+
+    return procedures.list_all()
+
+
+@app.delete("/api/procedures/{pid}")
+async def delete_procedure(pid: str) -> dict[str, bool]:
+    from . import procedures
+
+    if not procedures.delete(pid):
+        raise HTTPException(404, "No such procedure.")
+    return {"ok": True}
+
+
 @app.get("/api/memories")
 async def memories_list(q: str = ""):
     return await memory.search(q, k=50) if q else memory.list_all()
