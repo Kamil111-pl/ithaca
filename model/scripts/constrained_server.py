@@ -24,6 +24,7 @@ import hashlib
 import json
 import logging
 import os
+import sys
 import threading
 from typing import Any
 
@@ -166,21 +167,25 @@ _orig_generate = server.ResponseGenerator.generate
 
 def _generate(self, request, args, *a, **kw):
     # Hand the request's tools and the tokenizer to the logits-processor factory.
-    tools = getattr(request, "tools", None) or []
-    args.ithaca_tools = tools
-    args.ithaca_tokenizer = self.model_provider.tokenizer if tools else None
+    # The model loads lazily in the generation thread, so pass the provider and
+    # read its tokenizer when the logits processors are made (in that thread).
+    args.ithaca_tools = getattr(request, "tools", None) or []
+    args.ithaca_provider = self.model_provider
     return _orig_generate(self, request, args, *a, **kw)
 
 
 def _make_logits_processors(args):
     procs = list(_orig_make_lp(args))
     tools = getattr(args, "ithaca_tools", None)
-    tok = getattr(args, "ithaca_tokenizer", None)
+    provider = getattr(args, "ithaca_provider", None)
+    tok = getattr(provider, "tokenizer", None) if tools else None
     if tools and tok is not None and TOOL_OPEN in tok._tokenizer.get_vocab():
         grammar = _grammar_for(tools)
         if grammar:
             procs.append(ToolCallConstraint(grammar, tok))
             _stats["constrained"] += 1
+            if _stats["constrained"] == 1:
+                print(f"ithaca: first constrained request ({len(tools)} tools)", file=sys.stderr, flush=True)
         else:
             _stats["fallback"] += 1
     return procs
@@ -194,5 +199,5 @@ def install() -> None:
 if __name__ == "__main__":
     if os.environ.get("ITHACA_CONSTRAIN", "1") != "0":
         install()
-        logging.getLogger().info("Ithaca: tool calls are grammar-constrained (llguidance)")
+        print("ithaca: tool calls are grammar-constrained (llguidance)", file=sys.stderr, flush=True)
     server.main()
