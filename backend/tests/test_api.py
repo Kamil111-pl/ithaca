@@ -95,3 +95,16 @@ def test_voice_token_authorizes_only_voice_routes(client):
     assert client.get("/api/voice/status", headers=tok).status_code == 200
     assert client.get("/api/conversations", headers=tok).status_code == 401
     assert client.get("/api/voice/status", headers={"X-Ithaca-Voice-Token": "wrong"}).status_code == 401
+
+
+def test_destructive_shell_commands_need_approval():
+    from ithaca import security
+    from ithaca.tools.registry import ToolContext, registry
+
+    run = registry.get("run_command")
+    ctx = ToolContext(run_id="r", conversation_id="c")
+    for cmd in ("rm -rf *", "rm -r old", "cd x && rm -f *.txt", "find . -name '*.log' -delete", "git reset --hard",
+                "git clean -fd", "rm *", "rmdir build"):
+        assert not security.decide(run, {"command": cmd}, ctx, "seatbelt").allow, cmd
+    for cmd in ("python3 primes.py", "ls -la", "wc -l app.log", "rm notes.tmp", "grep -r rm src", "echo format"):
+        assert security.decide(run, {"command": cmd}, ctx, "seatbelt").allow, cmd

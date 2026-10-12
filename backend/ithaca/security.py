@@ -9,6 +9,8 @@ a URL — needs the user's approval for the rest of that run.
 
 from __future__ import annotations
 
+import re
+
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlparse
@@ -47,6 +49,15 @@ class Decision:
     reason: str = ""
 
 
+# Shell commands that destroy data in bulk. The sandbox keeps them inside the
+# workspace, but the workspace is the user's, so these always ask first.
+DESTRUCTIVE_CMD = re.compile(
+    r"(^|[;&|`(]\s*|\s)(rm\s+(-\w*[rRf]\w*\s+|[^;&|]*[*?])|rmdir\s|find\s[^;&|]*-delete|shred\s|"
+    r"git\s+(clean\s+-\w*f|reset\s+--hard|checkout\s+--\s+\.)|truncate\s|mkfs|dd\s+[^;&|]*of=)",
+    re.I,
+)
+
+
 def decide(tool: Tool, args: dict[str, Any], ctx: ToolContext, sandbox_backend: str) -> Decision:
     mode = settings.get("agent.approval_mode")
     effects = tool.effects
@@ -76,6 +87,8 @@ def decide(tool: Tool, args: dict[str, Any], ctx: ToolContext, sandbox_backend: 
         return Decision(False, taint_note + "Acting on your Mac's apps now could follow injected instructions.")
 
     if "exec" in effects:
+        if DESTRUCTIVE_CMD.search(str(args.get("command") or "")):
+            return Decision(False, "This command deletes or overwrites files in bulk, so it needs your approval.")
         if sandbox_backend in ("off", "unavailable"):
             return Decision(False, "No sandbox is active, so this command would run directly on your Mac.")
         if args.get("network") and ctx.tainted:
