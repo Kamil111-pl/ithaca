@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      body { margin: 0; width: 300px; font: 13px -apple-system, BlinkMacSystemFont, system-ui, sans-serif; background: #161616; color: #f5f5f7; }
+      .wrap { padding: 16px; display: grid; gap: 10px; }
+      h1 { margin: 0; font-size: 16px; letter-spacing: -0.01em; }
+      .status { display: inline-flex; gap: 6px; align-items: center; font-weight: 600; font-size: 12px; padding: 4px 10px; border-radius: 999px; background: rgba(255,255,255,.08); }
+      .dot { width: 8px; height: 8px; border-radius: 50%; background: #888; }
+      .ok .dot { background: #6fdc9b; } .bad .dot { background: #ff6b6b; }
+      p { margin: 0; color: rgba(245,245,247,.66); line-height: 1.45; }
+      input { width: 100%; box-sizing: border-box; padding: 9px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,.12); background: rgba(0,0,0,.3); color: inherit; font: 12px ui-monospace, Menlo, monospace; }
+      button { height: 34px; border-radius: 999px; border: 0; font-weight: 600; cursor: pointer; background: #f5f5f7; color: #111; }
+      a { color: #f5f5f7; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Ithaca</h1>
+      <span id="status" class="status"><span class="dot"></span><span id="label">…</span></span>
+      <p>Paste the pairing code from Ithaca → Settings → Browser.</p>
+      <input id="token" placeholder="Pairing code" autocomplete="off" />
+      <button id="save">Connect</button>
+      <p><a href="http://127.0.0.1:7100/#settings" target="_blank">Open Ithaca settings</a></p>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>

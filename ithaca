@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# Ithaca launcher.
+#
+#   ./ithaca setup          install Python + web dependencies, build the UI
+#   ./ithaca start          run the app at http://127.0.0.1:7100
+#   ./ithaca dev            backend with reload + Vite dev server on :5173
+#   ./ithaca build          rebuild the web UI
+#   ./ithaca test           run the backend test suite
+#   ./ithaca eval [...]     run the agent eval suite against a model
+#   ./ithaca model <cmd>    on-device model pipeline (see model/README.md)
+#   ./ithaca voice          always-on "Hey Ithaca" voice listener (local Whisper)
+#
+# Source, data and model weights live next to this script (on the Seagate
+# drive). Disposable environments (Python venv, node_modules) live in
+# ~/.ithaca on the internal disk, because exFAT has no symlinks and macOS's
+# ._ AppleDouble files break Python packaging there.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export ITHACA_HOME="${ITHACA_HOME:-$HOME/.ithaca}"
+VENV="$ITHACA_HOME/venv"
+MLX_VENV="$ITHACA_HOME/mlx"
+PY="$VENV/bin/python"
+export PYTHONPATH="$ROOT/backend${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONDONTWRITEBYTECODE=1   # keep __pycache__ off the exFAT drive
+
+find_python() {
+  for c in python3.12 python3.13 python3.11 python3; do
+    if command -v "$c" >/dev/null 2>&1 && "$c" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
+      command -v "$c"; return
+    fi
+  done
+  echo "Python 3.11+ is required (brew install python@3.12)." >&2; exit 1
+}
+
+ensure_venv() {
+  if [ ! -x "$PY" ]; then
+    echo "→ Creating Python environment in $VENV"
+    "$(find_python)" -m venv "$VENV"
+    "$PY" -m pip install -q --upgrade pip
+  fi
+  if [ ! -f "$VENV/.ithaca-deps" ] || [ "$ROOT/backend/requirements.txt" -nt "$VENV/.ithaca-deps" ]; then
+    echo "→ Installing backend dependencies"
+    # The app runs from source via PYTHONPATH; only dependencies are installed.
+    "$PY" -m pip install -q -r "$ROOT/backend/requirements.txt"
+    touch "$VENV/.ithaca-deps"
+  fi
+}
+
+ensure_mlx() {
+  if [ "$(uname -s)-$(uname -m)" != "Darwin-arm64" ]; then
+    echo "The on-device model pipeline needs an Apple Silicon Mac (MLX)." >&2; exit 1
+  fi
+  if [ ! -x "$MLX_VENV/bin/python" ]; then
+    echo "→ Creating MLX environment in $MLX_VENV"
+    "$(find_python)" -m venv "$MLX_VENV"
+    "$MLX_VENV/bin/pip" install -q --upgrade pip
+  fi
+  "$MLX_VENV/bin/python" -c 'import mlx_lm, datasets' 2>/dev/null || "$MLX_VENV/bin/pip" install -q mlx-lm datasets
+}
+
+cmd="${1:-start}"; shift || true
+case "$cmd" in
+  setup)
+    ensure_venv
+    if command -v npm >/dev/null 2>&1; then "$ROOT/scripts/build-web.sh"; else echo "npm not found — install Node.js to build the UI." >&2; fi
+    echo "✓ Ready. Run ./ithaca start"
+    ;;
+  start)
+    ensure_venv
+    [ -f "$ROOT/web/dist/index.html" ] || "$ROOT/scripts/build-web.sh"
+    # Bring up the local model too (unless ITHACA_NO_MODEL=1), preferring the
+    # distilled ithaca-local weights over the stock base.
+    if [ -z "${ITHACA_NO_MODEL:-}" ] && ! curl -sf -o /dev/null -m 2 http://127.0.0.1:8080/health; then
+      for w in ithaca-local base; do
+        if [ -d "$ROOT/model/weights/$w" ]; then
+          echo "→ Starting local model ($w) on :8080 — log: $ITHACA_HOME/mlx-server.log"
+          nohup "$ROOT/model/ithaca-model.sh" serve "$w" > "$ITHACA_HOME/mlx-server.log" 2>&1 &
+          break
+        fi
+      done
+    fi
+    # ITHACA_VISION=1 also starts the local vision model (computer use) on :8090.
+    if [ -n "${ITHACA_VISION:-}" ] && [ -d "$ROOT/model/weights/vision" ] && ! curl -sf -o /dev/null -m 2 http://127.0.0.1:8090/health; then
+      echo "→ Starting local vision model on :8090 — log: $ITHACA_HOME/vision-server.log"
+      nohup "$ROOT/model/ithaca-model.sh" vision > "$ITHACA_HOME/vision-server.log" 2>&1 &
+    fi
+    exec "$PY" -m uvicorn ithaca.main:app --host "${ITHACA_HOST:-127.0.0.1}" --port "${ITHACA_PORT:-7100}" --log-level warning
+    ;;
+  dev)
+    ensure_venv
+    "$PY" -m uvicorn ithaca.main:app --host 127.0.0.1 --port "${ITHACA_PORT:-7100}" --reload --reload-dir "$ROOT/backend/ithaca" &
+    trap 'kill %1 2>/dev/null' EXIT
+    "$ROOT/scripts/build-web.sh" dev
+    ;;
+  build)
+    "$ROOT/scripts/build-web.sh"
+    ;;
+  test)
+    ensure_venv
+    cd "$ROOT/backend" && exec "$PY" -m pytest -q -p no:cacheprovider "$@"
+    ;;
+  eval)
+    ensure_venv
+    exec "$PY" "$ROOT/evals/run.py" "$@"
+    ;;
+  voice)
+    ensure_venv
+    [ -f "$ROOT/model/weights/whisper/config.json" ] || [ -n "$(ls "$ROOT"/model/weights/whisper/*.safetensors "$ROOT"/model/weights/whisper/*.npz 2>/dev/null)" ] || \
+      "$ROOT/model/ithaca-model.sh" whisper
+    exec "$PY" -m ithaca.voice_daemon
+    ;;
+  model)
+    ensure_mlx
+    exec "$ROOT/model/ithaca-model.sh" "$@"
+    ;;
+  *)
+    sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+    exit 1
+    ;;
+esac

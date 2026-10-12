@@ -1,0 +1,23 @@
+[project]
+name = "ithaca"
+version = "1.0.0"
+description = "A local-first AI workspace: agent, documents, research, memory and focus."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "httpx>=0.27",
+    "pydantic>=2.7",
+    "anthropic>=1.0",
+    "mcp<2",
+    "numpy>=1.26",
+    "beautifulsoup4>=4.12",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+asyncio_default_fixture_loop_scope = "function"

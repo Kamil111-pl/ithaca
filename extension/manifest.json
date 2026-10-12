@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Ithaca Browser Bridge",
+  "version": "1.1.0",
+  "description": "Lets your local Ithaca assistant open tabs, read pages, click and type in this browser when you ask it to.",
+  "permissions": ["tabs", "scripting", "debugger", "storage", "alarms"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_popup": "popup.html", "default_title": "Ithaca" },
+  "minimum_chrome_version": "116"
+}

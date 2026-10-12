@@ -1,0 +1,18 @@
+# macOS / exFAT metadata
+._*
+.DS_Store
+.Spotlight-V100
+.fseventsd
+
+# runtime state (lives on this drive but never in git)
+data/
+model/runs/
+model/data/
+model/weights/
+web/node_modules/
+web/dist/
+__pycache__/
+*.pyc
+.pytest_cache/
+evals/reports/
+model/hf-cache/
