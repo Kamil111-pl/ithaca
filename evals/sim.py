@@ -169,6 +169,8 @@ class SimBrowser:
             self.tab["history"].append(self.tab["url"])
             self.tab.update(url=url, focus=None, fields={})
         self.visited.append(url)
+        if url == DOC_URL:  # a new Google Doc opens with the cursor in the body
+            self.tab["focus"] = next(i for i, el in enumerate(self._elements(), 1) if el.get("editable"))
 
     def _elements(self) -> list[dict[str, Any]]:
         return self._page(self.tab["url"]).get("elements", [])

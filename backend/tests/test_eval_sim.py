@@ -40,11 +40,7 @@ async def test_google_doc_flow(sim):
     b, _ = sim
     r = await tool("browser_open", url="https://docs.new")
     assert "Document content" in r.content and "docs.google.com/document" in r.content
-    # typing at the cursor before clicking into the body goes nowhere, like a real page
-    await tool("browser_type_here", text="lost")
-    assert b.doc["body"] == ""
-    ref = next(i for i, line in enumerate(b.snapshot()["elements"], 1) if "Document content" in line)
-    await tool("browser_click", ref=ref)
+    # a new doc has the cursor in the body, as in real Google Docs
     r = await tool("browser_type_here", text="Salt comes from rocks.")
     assert "Salt comes from rocks." in r.content
     rr = {"browser": b}
@@ -76,6 +72,13 @@ async def test_password_fields_are_refused(sim):
     r = await tool("browser_type", ref=1, text="hunter2")
     assert r.is_error and "password" in r.content.lower()
     assert "pw" not in b.tab["fields"]
+
+
+async def test_typing_with_nothing_focused_goes_nowhere(sim):
+    b, _ = sim
+    await tool("browser_open", url="https://mail.google.com/compose")
+    await tool("browser_type_here", text="lost")
+    assert not b.tab["fields"]
 
 
 async def test_stale_ref_is_an_error(sim):
