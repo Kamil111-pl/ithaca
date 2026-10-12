@@ -178,7 +178,9 @@ MD
     mkdir -p "$ITHACA_HOME/hf-serve/hub"
     # Memory-safe defaults for a 16 GB Mac: small prefill chunks, a bounded
     # prompt cache, and one request at a time (OOM kills the generation thread).
-    HF_HOME="$ITHACA_HOME/hf-serve" exec "$MLX" -m mlx_lm server --model "$target" --host 127.0.0.1 --port "$PORT" \
+    # Tool calls are grammar-constrained (scripts/constrained_server.py); set
+    # ITHACA_CONSTRAIN=0 for the plain mlx-lm server.
+    HF_HOME="$ITHACA_HOME/hf-serve" exec "$MLX" "$HERE/scripts/constrained_server.py" --model "$target" --host 127.0.0.1 --port "$PORT" \
       --temp 0.6 --top-p 0.9 --max-tokens 4096 --prefill-step-size "${PREFILL_STEP:-512}" \
       --prompt-cache-size 2 --prompt-cache-bytes "${PROMPT_CACHE_BYTES:-1500000000}" \
       --decode-concurrency 1 --prompt-concurrency 1

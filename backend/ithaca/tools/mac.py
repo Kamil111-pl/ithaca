@@ -12,10 +12,12 @@ Settings → Privacy & Security → Automation).
 from __future__ import annotations
 
 import asyncio
+import difflib
 import html
 import re
 import shutil
 import sys
+from pathlib import Path
 from typing import Any
 
 from .. import config
@@ -60,6 +62,41 @@ APP_ALIASES = {"chrome": "Google Chrome", "google chrome": "Google Chrome", "vsc
 
 def _app_name(name: str) -> str:
     return APP_ALIASES.get(name.strip().lower(), name.strip())
+
+
+APP_DIRS = ("/Applications", "/System/Applications", "/System/Applications/Utilities", "/Applications/Utilities",
+            str(Path.home() / "Applications"))
+
+
+def installed_apps() -> list[str]:
+    names = set()
+    for d in APP_DIRS:
+        try:
+            names.update(p.stem for p in Path(d).glob("*.app"))
+        except OSError:
+            pass
+    return sorted(names)
+
+
+def suggest_apps(name: str, n: int = 3) -> list[str]:
+    """Installed apps whose names are close to `name` ('teams' → 'Microsoft Teams')."""
+    apps = installed_apps()
+    low = name.strip().lower()
+    contains = [a for a in apps if low and (low in a.lower() or a.lower() in low)]
+    close = difflib.get_close_matches(name, apps, n=n, cutoff=0.5)
+    return list(dict.fromkeys(contains + close))[:n]
+
+
+async def app_running(app: str, wait_s: float = 4.0) -> bool:
+    """Poll until `app` is running (open -a returns before the app is up)."""
+    deadline = asyncio.get_running_loop().time() + wait_s
+    while True:
+        code, out = await _osascript(f'return application "{app}" is running', timeout=5)
+        if code == 0 and out.strip() == "true":
+            return True
+        if asyncio.get_running_loop().time() >= deadline:
+            return False
+        await asyncio.sleep(0.4)
 
 
 async def _open_site(url: str, ctx: ToolContext, preferred_app: str | None = None) -> ToolResult:
@@ -133,14 +170,24 @@ if sys.platform == "darwin" and shutil.which("osascript"):
         site = WEB_APPS.get(args["name"].strip().lower())
         if site:
             return await _open_site(site, ctx)
+        app = _app_name(args["name"])
         proc = await asyncio.create_subprocess_exec(
-            "open", "-a", _app_name(args["name"]), stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            "open", "-a", app, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
         _, err = await proc.communicate()
         if proc.returncode:
-            return ToolResult(f"Could not open “{args['name']}”: {err.decode().strip()} If it's a website, use "
-                              "browser_open with its URL instead.", is_error=True)
-        return ToolResult(f"Opened {_app_name(args['name'])}.")
+            hint = suggest_apps(args["name"])
+            return ToolResult(
+                f"Could not open “{args['name']}”: no app by that name is installed."
+                + (f" Did you mean: {', '.join(hint)}? Call open_app again with the exact name." if hint else
+                   " If it's a website, use browser_open with its URL instead."),
+                is_error=True)
+        # verify: `open` returns before the app is up, and can "succeed" without launching it
+        if not await app_running(app):
+            return ToolResult(f"Asked macOS to open {app}, but it isn't running yet. It may still be starting, or "
+                              "it quit. Check before continuing (computer_screenshot), or try open_app once more.",
+                              is_error=True)
+        return ToolResult(f"Opened {app} (checked: it's running).")
 
     @tool(
         "open_url",

@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import logging
+import re
 import shutil
 from pathlib import Path
 from typing import Any
@@ -192,6 +193,20 @@ end run
     )
 
 
+SIGN_IN = ("accounts.google.com", "login.", "/login", "/signin", "/sign-in", "/sign_in", "auth.", "/auth/", "sso.")
+
+
+def _redirect_note(requested: str, landed: str) -> str:
+    """Opening a site that bounced to a sign-in page is the commonest silent failure."""
+    want, got = urlparse(requested).hostname or "", urlparse(landed or "").hostname or ""
+    if not got or got == want or got.endswith("." + want) or want.endswith("." + got):
+        return ""
+    if any(m in (landed or "").lower() for m in SIGN_IN):
+        return (f"⚠ Opening {want} redirected to a sign-in page ({got}). The user isn't signed in there. Ask them to "
+                "sign in in their browser (never type passwords yourself), then continue.\n")
+    return f"Note: {want} redirected to {got}.\n"
+
+
 def _format(snap: dict[str, Any], note: str = "") -> ToolResult:
     body = (
         f"{note or snap.get('note') or ''}Page: {snap.get('title', '')}\nURL: {snap.get('url', '')}\n"
@@ -199,8 +214,11 @@ def _format(snap: dict[str, Any], note: str = "") -> ToolResult:
         + ("\n".join(snap.get("elements") or []) or "(none visible)")
         + f"\n\nPage text:\n{snap.get('text', '')}"
     )
-    return ToolResult(body, untrusted_source=snap.get("url") or "browser",
-                      data={"url": snap.get("url"), "title": snap.get("title"), "browser": "chrome"})
+    # the extension checks its own actions; a typed text that didn't land is a failure, not a success
+    failed = snap.get("verified") is False and "Typed" in (snap.get("note") or "")
+    return ToolResult(body, untrusted_source=snap.get("url") or "browser", is_error=failed,
+                      data={"url": snap.get("url"), "title": snap.get("title"), "browser": "chrome",
+                            "verified": snap.get("verified")})
 
 
 async def _chrome(method: str, params: dict[str, Any] | None = None) -> ToolResult:
@@ -213,6 +231,9 @@ async def _chrome(method: str, params: dict[str, Any] | None = None) -> ToolResu
 def _el(page, ref: Any):
     return page.locator(f'[data-ithaca-ref="{int(ref)}"]').first
 
+
+# element roles that accept typed text, as the extension names them (inputs are named by their type)
+TEXT_ROLES = re.compile(r'^\[\d+\] (textbox|searchbox|combobox|textarea|document|text|email|search|url|tel|number)\b', re.I)
 
 _ACT = dict(effects={"browser_act"}, group="browser",
             keywords="browser chrome website click button link form login fill page interact navigate")
@@ -232,7 +253,11 @@ async def browser_open(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
         return ToolResult(str(exc), is_error=True)
     try:
         if _use_chrome():
-            return await _chrome("open", {"url": url, "new_tab": args.get("new_tab", True)})
+            try:
+                snap = await bridge.call("open", {"url": url, "new_tab": args.get("new_tab", True)})
+            except ExtensionError as exc:
+                return ToolResult(str(exc), is_error=True)
+            return _format(snap, _redirect_note(url, snap.get("url", "")) + (snap.get("note") or ""))
     except ExtensionError:
         return await _open_in_users_browser(url)
     async with manager.lock:
@@ -429,4 +454,22 @@ async def browser_type_here(args: dict[str, Any], ctx: ToolContext) -> ToolResul
                               is_error=True)
     except ExtensionError as exc:
         return ToolResult(str(exc), is_error=True)
-    return await _chrome("type_here", {"text": args["text"]}, )
+    try:
+        return _format(await bridge.call("type_here", {"text": args["text"]}))
+    except ExtensionError as exc:
+        if "keyboard focus" not in str(exc):
+            return ToolResult(str(exc), is_error=True)
+        # Recover once: if the page has exactly one text field, that's where the text was meant to go.
+        try:
+            snap = await bridge.call("snapshot", {})
+        except ExtensionError:
+            return ToolResult(str(exc), is_error=True)
+        fields = [i for i, line in enumerate(snap.get("elements") or [], 1) if TEXT_ROLES.search(line) and "(password)" not in line]
+        if len(fields) != 1:
+            return ToolResult(f"{exc} Candidates: {', '.join(f'[{i}]' for i in fields) or 'none visible'}.", is_error=True)
+        try:
+            await bridge.call("click", {"ref": fields[0]})
+            snap = await bridge.call("type_here", {"text": args["text"]})
+        except ExtensionError as exc2:
+            return ToolResult(str(exc2), is_error=True)
+        return _format(snap, f"Nothing had focus, so I clicked [{fields[0]}] (the only text field) first. " + (snap.get("note") or ""))

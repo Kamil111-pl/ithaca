@@ -47,3 +47,12 @@ async def test_web_apps_open_as_websites(monkeypatch):
     await registry.get("open_url").handler({"url": "mail.google.com", "app": "Chrome"}, ctx)
     assert opened == ["https://mail.google.com", "https://mail.google.com"]
     assert mac._app_name("chrome") == "Google Chrome"
+
+
+def test_unknown_app_names_get_suggestions(monkeypatch):
+    from ithaca.tools import mac
+
+    monkeypatch.setattr(mac, "installed_apps", lambda: ["Microsoft Teams", "Notes", "Spotify", "TextEdit"])
+    assert mac.suggest_apps("teams")[0] == "Microsoft Teams"
+    assert "Spotify" in mac.suggest_apps("spotfy")
+    assert mac.suggest_apps("zzzz") == []

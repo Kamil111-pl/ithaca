@@ -58,6 +58,8 @@ ensure_mlx() {
     "$MLX_VENV/bin/pip" install -q --upgrade pip
   fi
   "$MLX_VENV/bin/python" -c 'import mlx_lm, datasets' 2>/dev/null || "$MLX_VENV/bin/pip" install -q mlx-lm datasets
+  # grammar-constrained tool calls (model/scripts/constrained_server.py)
+  "$MLX_VENV/bin/python" -c 'import llguidance' 2>/dev/null || "$MLX_VENV/bin/pip" install -q "llguidance==1.9.1"
 }
 
 cmd="${1:-start}"; shift || true

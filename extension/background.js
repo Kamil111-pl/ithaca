@@ -273,6 +273,53 @@ async function press(tabId, combo) {
 
 const settle = (ms = 800) => new Promise((r) => setTimeout(r, ms));
 
+// ------------------------------------------------------------ verification
+// Small reads of page state so each action can report whether it worked.
+
+/** What has keyboard focus: is it something that accepts typed text? Follows same-origin iframes (Google Docs). */
+async function focusInfo(tabId) {
+  const [res] = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: () => {
+      let el = document.activeElement;
+      let frames = 0;
+      while (el && el.tagName === "IFRAME") {
+        try {
+          const inner = el.contentDocument && el.contentDocument.activeElement;
+          if (!inner) break;
+          el = inner;
+          frames++;
+        } catch {
+          return { editable: true, kind: "iframe", readable: false }; // cross-origin editor: can't see in, assume it takes text
+        }
+      }
+      if (!el || el === document.body || el === document.documentElement) return { editable: false, kind: "none" };
+      const tag = el.tagName.toLowerCase();
+      const type = (el.type || "").toLowerCase();
+      const textInput = tag === "textarea" || (tag === "input" && !["checkbox", "radio", "button", "submit", "range", "color", "file", "image", "reset", "hidden"].includes(type));
+      const editable = textInput || el.isContentEditable || el.getAttribute("role") === "textbox";
+      const value = textInput ? el.value : el.isContentEditable ? el.innerText : "";
+      // Google Docs types into a hidden iframe and draws text on a canvas: focus is all we can check.
+      return { editable, kind: tag, password: type === "password", readable: textInput || (el.isContentEditable && frames === 0), value: (value || "").slice(-4000) };
+    },
+  });
+  return res.result || { editable: false, kind: "none" };
+}
+
+/** A cheap fingerprint of the page, to tell whether an action changed anything. */
+async function pageSig(tabId) {
+  const [res] = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: () => [location.href, document.title, (document.body ? document.body.innerText.length : 0),
+                 document.querySelectorAll("*").length, document.activeElement ? document.activeElement.tagName : ""].join("|"),
+  });
+  return res.result;
+}
+
+/** The last characters of `text`, as the page would normalise them, for read-back checks. */
+const tail = (text) => text.replace(/\s+/g, " ").trim().slice(-24);
+const contains = (value, text) => value.replace(/\s+/g, " ").includes(tail(text));
+
 // ------------------------------------------------------------------ commands
 
 async function handle(method, p) {
@@ -300,6 +347,7 @@ async function handle(method, p) {
     case "click": {
       const target = await locate(tab.id, p.ref);
       const before = new Set((await chrome.tabs.query({})).map((t) => t.id));
+      const sigBefore = await pageSig(tab.id);
       await click(tab.id, target.x, target.y);
       await settle();
       const opened = (await chrome.tabs.query({})).find((t) => !before.has(t.id) && t.openerTabId === tab.id);
@@ -309,7 +357,15 @@ async function handle(method, p) {
         return snapshot(opened.id, `Clicked [${p.ref}]; it opened a new tab.\n`);
       }
       await waitLoad(tab.id, 6000);
-      return snapshot(tab.id, `Clicked [${p.ref}].\n`);
+      let sigAfter = await pageSig(tab.id).catch(() => "");
+      if (sigAfter === sigBefore) {
+        await settle(1200); // slow pages: give it one more moment
+        sigAfter = await pageSig(tab.id).catch(() => "");
+      }
+      const unchanged = sigAfter === sigBefore;
+      return { ...(await snapshot(tab.id, unchanged
+        ? `Clicked [${p.ref}], but nothing on the page changed. The click may have missed; check the element number, or try another element.\n`
+        : `Clicked [${p.ref}].\n`)), verified: !unchanged };
     }
     case "type": {
       const target = await locate(tab.id, p.ref);
@@ -317,19 +373,44 @@ async function handle(method, p) {
       await click(tab.id, target.x, target.y);
       if (target.field && p.replace !== false) await press(tab.id, "Meta+A");
       await cdp(tab.id, "Input.insertText", { text: p.text });
+      // read back before submitting (submitting usually clears or leaves the page)
+      const after = await focusInfo(tab.id);
+      let note = `Typed into [${p.ref}]`;
+      let verified = null;
+      if (after.readable) {
+        verified = contains(after.value || "", p.text);
+        if (!verified) note += `, but the field doesn't show it (it contains "${(after.value || "").slice(-80)}")`;
+      }
       if (p.submit) {
         await press(tab.id, "Enter");
         await settle(1200);
         await waitLoad(tab.id, 8000);
+        note += " and pressed Enter";
       }
-      return snapshot(tab.id, `Typed into [${p.ref}]${p.submit ? " and pressed Enter" : ""}.\n`);
+      return { ...(await snapshot(tab.id, note + ".\n")), verified };
     }
     case "type_here": {
       // Type at the current cursor (e.g. into a Google Doc after clicking in it).
+      const focus = await focusInfo(tab.id);
+      if (focus.password) throw new Error("Ithaca never types passwords. Ask the user to type it in the browser themselves.");
+      if (!focus.editable) {
+        throw new Error("Nothing on the page has keyboard focus, so the text would go nowhere. "
+          + "Click the text field or the document body first (browser_click), then type again.");
+      }
       await attach(tab.id);
+      const beforeValue = focus.value || "";
       await cdp(tab.id, "Input.insertText", { text: p.text });
       await settle(500);
-      return snapshot(tab.id, `Typed ${p.text.length} characters.\n`);
+      let verified = null;
+      let note = `Typed ${p.text.length} characters`;
+      if (focus.readable) {
+        const now = await focusInfo(tab.id);
+        verified = (now.value || "").length > beforeValue.length && contains(now.value || "", p.text);
+        note += verified ? " (checked: the text is in the field)" : ", but the field doesn't show the new text";
+      } else {
+        note += " into the focused editor";
+      }
+      return { ...(await snapshot(tab.id, note + ".\n")), verified };
     }
     case "press":
       await press(tab.id, p.key);

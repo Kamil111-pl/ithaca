@@ -74,11 +74,32 @@ async def test_password_fields_are_refused(sim):
     assert "pw" not in b.tab["fields"]
 
 
-async def test_typing_with_nothing_focused_goes_nowhere(sim):
+async def test_typing_with_nothing_focused_is_refused(sim):
     b, _ = sim
-    await tool("browser_open", url="https://mail.google.com/compose")
-    await tool("browser_type_here", text="lost")
+    await tool("browser_open", url="https://mail.google.com/compose")  # three text fields: no guessing
+    r = await tool("browser_type_here", text="lost")
+    assert r.is_error and "keyboard focus" in r.content
     assert not b.tab["fields"]
+
+
+async def test_typing_recovers_when_page_has_one_field(sim):
+    b = SimBrowser(sites={"https://s.example": {"title": "Search", "text": "", "elements": [
+        {"role": "link", "name": "Home", "go": "https://s.example"},
+        {"role": "textbox", "name": "Search", "field": "q"}]}})
+    browser.bridge = b
+    await tool("browser_open", url="https://s.example")
+    r = await tool("browser_type_here", text="cats")
+    assert not r.is_error and "only text field" in r.content
+    assert b.tab["fields"]["q"] == "cats"
+
+
+async def test_click_that_changes_nothing_says_so(sim):
+    b, _ = sim
+    await tool("browser_open", url="https://docs.google.com")
+    els = b.snapshot()["elements"]
+    r = await tool("browser_click", ref=next(i for i, l in enumerate(els, 1) if "Search" in l))
+    r = await tool("browser_click", ref=next(i for i, l in enumerate(els, 1) if "Search" in l))
+    assert "nothing on the page changed" in r.content
 
 
 async def test_stale_ref_is_an_error(sim):

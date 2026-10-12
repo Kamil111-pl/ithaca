@@ -227,13 +227,15 @@ class SimBrowser:
             self.clicked.append(el["name"])
             if el.get("submit"):
                 self._submit(el)
-                return self.snapshot(f"Clicked [{ref}] and the form was submitted.\n")
+                return {**self.snapshot(f"Clicked [{ref}].\n"), "verified": True}
             if el.get("go"):
                 self._navigate(el["go"], new_tab=bool(el.get("new_tab")))
-                return self.snapshot(f"Clicked [{ref}].\n")
-            if el.get("editable") or el.get("field"):
+                return {**self.snapshot(f"Clicked [{ref}].\n"), "verified": True}
+            if (el.get("editable") or el.get("field")) and self.tab["focus"] != ref:
                 self.tab["focus"] = ref
-            return self.snapshot(f"Clicked [{ref}].\n")
+                return {**self.snapshot(f"Clicked [{ref}].\n"), "verified": True}
+            return {**self.snapshot(f"Clicked [{ref}], but nothing on the page changed. The click may have missed; "
+                                    "check the element number, or try another element.\n"), "verified": False}
         if method == "type":
             ref = int(p["ref"])
             el = self._el(ref)
@@ -245,12 +247,17 @@ class SimBrowser:
             self._write(el, p["text"], replace=True)
             if p.get("submit") and el.get("submit"):
                 self._submit(el)
-            return self.snapshot(f"Typed into [{ref}]{' and pressed Enter' if p.get('submit') else ''}.\n")
+            return {**self.snapshot(f"Typed into [{ref}]{' and pressed Enter' if p.get('submit') else ''}.\n"), "verified": True}
         if method == "type_here":
+            # like the extension: refuse when nothing has keyboard focus (the text would go nowhere)
             ref = self.tab["focus"]
-            if ref:  # nothing focused → keystrokes go nowhere, like a real page
-                self._write(self._el(ref), p["text"], replace=False)
-            return self.snapshot("Typed at the cursor.\n")
+            if not ref:
+                raise _err("Nothing on the page has keyboard focus, so the text would go nowhere. "
+                           "Click the text field or the document body first (browser_click), then type again.")
+            if self._el(ref).get("password"):
+                raise _err("Ithaca never types passwords. Ask the user to type it in the browser themselves.")
+            self._write(self._el(ref), p["text"], replace=False)
+            return {**self.snapshot(f"Typed {len(p['text'])} characters (checked: the text is in the field).\n"), "verified": True}
         if method == "press":
             key = str(p["key"]).lower()
             ref = self.tab["focus"]

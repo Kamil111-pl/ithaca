@@ -20,3 +20,23 @@ def test_browser_actions_need_one_approval_per_run():
     ctx.services["approved_effects"] = {"browser_act"}
     assert security.decide(click, {}, ctx, "seatbelt").allow
     assert security.decide(registry.get("browser_open"), {"url": "https://apple.com"}, ctx, "seatbelt").allow
+
+
+def test_redirect_to_sign_in_is_flagged():
+    from ithaca.tools.browser import _redirect_note
+
+    assert "sign-in" in _redirect_note("https://docs.new", "https://accounts.google.com/v3/signin/identifier?continue=docs")
+    assert _redirect_note("https://mail.google.com", "https://mail.google.com/mail/u/0/#inbox") == ""
+    assert _redirect_note("https://github.com", "https://www.github.com/") == ""
+    assert "redirected to" in _redirect_note("https://t.co/x", "https://example.com/article")
+
+
+def test_text_that_did_not_land_is_a_failure():
+    from ithaca.tools.browser import _format
+
+    bad = _format({"url": "https://x", "title": "x", "elements": [], "text": "", "verified": False,
+                   "note": "Typed 5 characters, but the field doesn't show the new text.\n"})
+    assert bad.is_error
+    clicked = _format({"url": "https://x", "title": "x", "elements": [], "text": "", "verified": False,
+                       "note": "Clicked [3], but nothing on the page changed.\n"})
+    assert not clicked.is_error and "nothing on the page changed" in clicked.content
