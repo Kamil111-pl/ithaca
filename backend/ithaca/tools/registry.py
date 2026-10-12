@@ -15,6 +15,8 @@ MCP servers). Reading such output taints the run; see security.py.
 
 from __future__ import annotations
 
+import json
+
 import math
 import re
 from dataclasses import dataclass, field
@@ -179,6 +181,36 @@ def tool(
 
 def obj(properties: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
     return {"type": "object", "properties": properties, "required": required or [], "additionalProperties": False}
+
+
+def coerce_args(schema: dict[str, Any], args: dict[str, Any]) -> dict[str, Any]:
+    """Turn string values into the schema's type when they parse cleanly ("4" → 4, "True" → True).
+
+    Models that write tool calls as XML (Qwen3.5) send every value as text; the
+    server only converts types for tools described in the prompt."""
+    if not isinstance(args, dict):
+        return args
+    props = schema.get("properties", {})
+    out = dict(args)
+    for key, value in args.items():
+        expected = (props.get(key) or {}).get("type")
+        if not isinstance(value, str) or expected in (None, "string"):
+            continue
+        text = value.strip()
+        try:
+            if expected == "integer" and re.fullmatch(r"-?\d+", text):
+                out[key] = int(text)
+            elif expected == "number" and re.fullmatch(r"-?\d+(\.\d+)?([eE][-+]?\d+)?", text):
+                out[key] = float(text) if any(c in text for c in ".eE") else int(text)
+            elif expected == "boolean" and text.lower() in ("true", "false"):
+                out[key] = text.lower() == "true"
+            elif expected in ("array", "object"):
+                parsed = json.loads(text)
+                if isinstance(parsed, list if expected == "array" else dict):
+                    out[key] = parsed
+        except (ValueError, json.JSONDecodeError):
+            pass
+    return out
 
 
 def validate_args(schema: dict[str, Any], args: dict[str, Any]) -> str | None:

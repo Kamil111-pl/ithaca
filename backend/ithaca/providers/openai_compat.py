@@ -119,6 +119,12 @@ class OpenAICompatProvider:
                 from ..tools.registry import registry
 
                 body["ithaca_grammar_tools"] = self.tools_to_wire([t.spec() for t in registry.all()])
+        if self.base_url.startswith(LOCAL_PREFIXES):
+            # Thinking models (Qwen3.5) can spend their whole budget reasoning on a 16 GB
+            # Mac; off unless the user turns it on. Templates without the switch ignore it.
+            from .. import settings
+
+            body["chat_template_kwargs"] = {"enable_thinking": bool(settings.get("agent.local_thinking"))}
 
         partial: dict[int, dict[str, Any]] = {}
         usage: dict[str, int] = {}

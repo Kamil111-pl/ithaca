@@ -42,3 +42,16 @@ def test_openai_wire_serializes_tool_calls():
 def test_mcp_names_fit_provider_limits():
     name = _qualified("a-very-long-server-name-for-testing-purposes", "an_extremely_long_tool_name_" * 4)
     assert len(name) <= 64 and name.startswith("mcp__")
+
+
+def test_string_arguments_are_coerced_to_schema_types():
+    from ithaca.tools.registry import coerce_args, validate_args
+
+    schema = {"type": "object", "properties": {"ref": {"type": "integer"}, "submit": {"type": "boolean"},
+                                               "text": {"type": "string"}, "ratio": {"type": "number"},
+                                               "tags": {"type": "array"}}, "required": ["ref"]}
+    args = coerce_args(schema, {"ref": "4", "submit": "True", "text": "42", "ratio": "0.5", "tags": '["a"]'})
+    assert args == {"ref": 4, "submit": True, "text": "42", "ratio": 0.5, "tags": ["a"]}
+    assert validate_args(schema, args) is None
+    bad = coerce_args(schema, {"ref": "four"})
+    assert bad == {"ref": "four"} and validate_args(schema, bad)

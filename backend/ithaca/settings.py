@@ -24,6 +24,7 @@ DEFAULTS: dict[str, Any] = {
     "agent.preload_tools": 6,
     "agent.local_temperature": 0.3,
     "agent.learn_procedures": True,
+    "agent.local_thinking": False,
     # Inject the most relevant memories into each turn.
     "memory.auto_recall": True,
     # auto | seatbelt | docker | off

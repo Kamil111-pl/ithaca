@@ -18,7 +18,7 @@ from typing import Any, AsyncIterator
 
 from .. import db, events, local_servers, procedures, providers, sandbox, security, settings
 from ..providers.base import ProviderError
-from ..tools.registry import ToolContext, ToolResult, registry, validate_args
+from ..tools.registry import ToolContext, ToolResult, coerce_args, registry, validate_args
 from . import prompts
 
 log = logging.getLogger("ithaca.agent")
@@ -459,6 +459,8 @@ async def _run_tool(live: LiveRun, ctx: ToolContext, call: dict[str, Any], backe
     conv = live.conversation_id
     name, args, call_id = call["name"], call.get("arguments") or {}, call["id"]
     tool = registry.get(name)
+    if tool is not None:
+        args = coerce_args(tool.parameters, args)
     started = time.monotonic()
     await live.publish({"type": "tool_start", "tool_call_id": call_id, "name": name, "arguments": args})
 

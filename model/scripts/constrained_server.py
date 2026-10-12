@@ -39,6 +39,8 @@ log = logging.getLogger("ithaca.constrain")
 
 TOOL_OPEN = "<tool_call>"
 TOOL_CLOSE = "</tool_call>"
+THINK_OPEN = "<think>"
+THINK_CLOSE = "</think>"
 
 _state = threading.local()
 _lock = threading.Lock()
@@ -58,37 +60,94 @@ def _strict(schema: dict[str, Any]) -> dict[str, Any]:
     return s
 
 
-def build_grammar(tools: list[dict[str, Any]]) -> str | None:
-    """A Lark grammar: free text, where each `<tool_call>` must be a valid call to one of `tools`.
+def _lit(s: str) -> str:
+    return json.dumps(s)
 
-    Qwen's chat template writes a call as `<tool_call>\\n{"name": …, "arguments": …}\\n</tool_call>`,
-    where both tags are single special tokens; they're referenced as tokens here.
+
+def _xml_param(key: str, schema: dict[str, Any]) -> str:
+    """One `<parameter=key>` block, its value shaped by the schema type (as mlx-lm's qwen3_coder parser reads it)."""
+    head, tail = _lit(f"<parameter={key}>\n"), _lit("\n</parameter>\n")
+    ty = schema.get("type")
+    if "enum" in schema and all(isinstance(v, str) for v in schema["enum"]):
+        return f"{head} ({' | '.join(_lit(v) for v in schema['enum'])}) {tail}"
+    if ty == "integer":
+        return f"{head} /-?[0-9]+/ {tail}"
+    if ty == "number":
+        return f"{head} /-?[0-9]+(\\.[0-9]+)?/ {tail}"
+    if ty == "boolean":
+        return f'{head} ("true" | "false" | "True" | "False") {tail}'
+    if ty in ("object", "array"):
+        return f"{head} %json {json.dumps(_strict(schema) if ty == 'object' else schema)} {tail}"
+    # free text: a lazy lexeme that ends at the first closing tag
+    return None  # handled by the caller as a lazy rule
+
+
+def build_grammar(tools: list[dict[str, Any]], fmt: str = "json", special: frozenset[str] = frozenset({TOOL_OPEN, TOOL_CLOSE})) -> str | None:
+    """A Lark grammar: free text, where each tool call must be a valid call to one of `tools`.
+
+    fmt "json" (Qwen3):   <tool_call>\\n{"name": …, "arguments": {…}}\\n</tool_call>
+    fmt "xml"  (Qwen3.5): <tool_call>\\n<function=name>\\n<parameter=k>\\nvalue\\n</parameter>\\n</function>\\n</tool_call>
+    Tags in `special` are single special tokens (referenced as tokens); the rest are plain
+    text, matched lazily. An optional leading `…</think>` lets thinking models finish thinking.
     """
-    calls = []
+    def tag(t: str) -> str:
+        return t if t in special else _lit(t)
+
+    rules, calls = [], []
     for t in tools:
         fn = t.get("function") or t
         name = fn.get("name")
-        if name:
-            head = json.dumps('\n{"name": ' + json.dumps(name) + ', "arguments": ')
-            calls.append(f'{head} %json {json.dumps(_strict(fn.get("parameters") or {}))} "}}\\n"')
+        if not name:
+            continue
+        i = len(calls)
+        params = fn.get("parameters") or {}
+        if fmt == "xml":
+            props = params.get("properties") or {}
+            required = set(params.get("required") or [])
+            parts = []
+            for j, (key, sch) in enumerate(props.items()):
+                block = _xml_param(key, sch or {})
+                if block is None:
+                    rules.append(f'p{i}_{j}[lazy]: {_lit(f"<parameter={key}>" + chr(10))} /(.|\\n)*/ {_lit(chr(10) + "</parameter>" + chr(10))}')
+                    block = f"p{i}_{j}"
+                parts.append(block if key in required else f"({block})?")
+            calls.append(f'{_lit(chr(10) + f"<function={name}>" + chr(10))} {" ".join(parts)} {_lit("</function>" + chr(10))}')
+        else:
+            head = _lit('\n{"name": ' + json.dumps(name) + ', "arguments": ')
+            calls.append(f'{head} %json {json.dumps(_strict(params))} "}}\\n"')
     if not calls:
         return None
-    rules = "\n".join(f"call_{i}: {c}" for i, c in enumerate(calls))
-    return (
-        "%llguidance {}\n"
-        "start: (TEXT tool_call)* TEXT\n"
-        f"tool_call: {TOOL_OPEN} ({' | '.join(f'call_{i}' for i in range(len(calls)))}) {TOOL_CLOSE}\n"
-        f"{rules}\n"
-        "TEXT: /(.|\\n)*/\n"
-    )
+    body = " | ".join(f"call_{i}" for i in range(len(calls)))
+    lines = ["%llguidance {}", "start: think? seg* TEXT", f"seg: pre_tool ({body}) {tag(TOOL_CLOSE)}"]
+    lines.append(f"pre_tool: TEXT {TOOL_OPEN}" if TOOL_OPEN in special else f"pre_tool[lazy]: TEXT {_lit(TOOL_OPEN)}")
+    open_think = f"{THINK_OPEN}? " if THINK_OPEN in special else ""
+    lines.append(f"think: {open_think}TEXT {THINK_CLOSE}" if THINK_CLOSE in special else f"think[lazy]: TEXT {_lit(THINK_CLOSE)}")
+    lines += [f"call_{i}: {c}" for i, c in enumerate(calls)] + rules
+    lines.append("TEXT: /(.|\\n)*/")
+    return "\n".join(lines) + "\n"
 
 
-def _grammar_for(tools: list[dict[str, Any]]) -> str | None:
-    key = hashlib.sha256(json.dumps(tools, sort_keys=True).encode()).hexdigest()
+def tokenizer_traits(tok) -> tuple[str, frozenset[str]]:
+    """The model's tool-call format and which tags are special tokens."""
+    hf = tok._tokenizer
+    template = getattr(hf, "chat_template", None) or getattr(tok, "chat_template", None) or ""
+    if isinstance(template, dict):
+        template = " ".join(template.values())
+    fmt = "xml" if "<function=" in str(template) else "json"
+    # llguidance treats every added token as special (its bytes carry a marker), so
+    # a tag that is a single added token must be referenced as a token. Qwen3 and
+    # Qwen3.5 both add <tool_call>, </tool_call> and </think> this way.
+    added = {t.content for t in (getattr(hf, "added_tokens_decoder", {}) or {}).values()}
+    special = frozenset(t for t in (TOOL_OPEN, TOOL_CLOSE, THINK_OPEN, THINK_CLOSE) if t in added)
+    return fmt, special
+
+
+def _grammar_for(tools: list[dict[str, Any]], fmt: str = "json", special: frozenset[str] = frozenset({TOOL_OPEN, TOOL_CLOSE})) -> str | None:
+    key = hashlib.sha256(json.dumps([tools, fmt, sorted(special)], sort_keys=True).encode()).hexdigest()
     with _lock:
         if key not in _grammars:
             try:
-                g = build_grammar(tools)
+                g = build_grammar(tools, fmt, special)
                 if g is not None:
                     from llguidance import LLMatcher
 
@@ -194,7 +253,8 @@ def _make_logits_processors(args):
     provider = getattr(args, "ithaca_provider", None)
     tok = getattr(provider, "tokenizer", None) if tools else None
     if tools and tok is not None and TOOL_OPEN in tok._tokenizer.get_vocab():
-        grammar = _grammar_for(tools)
+        fmt, special = tokenizer_traits(tok)
+        grammar = _grammar_for(tools, fmt, special)
         if grammar:
             procs.append(ToolCallConstraint(grammar, tok))
             _stats["constrained"] += 1
