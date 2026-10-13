@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/banner.jpg" alt="Ithaca: private intelligence for your Mac" width="100%"></p>
+
 # Ithaca
 
 A private, local-first AI workspace for your Mac: an agent that can use tools safely, documents, deep research, long-term memory, and a focus timer, wrapped in an iOS 26–style Liquid Glass interface. It ships with a pipeline to fine-tune, distill and quantize its own on-device model that runs on a 16 GB MacBook.
