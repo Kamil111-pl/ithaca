@@ -49,11 +49,24 @@ _tokenizers: dict[tuple[int, int], Any] = {}
 _stats = {"constrained": 0, "fallback": 0}
 
 
+def _no_extra_keys(node: Any) -> None:
+    """Objects at every depth (array items, nested objects) reject unknown keys unless they say otherwise."""
+    if isinstance(node, dict):
+        if node.get("type") == "object" and "properties" in node and "additionalProperties" not in node:
+            node["additionalProperties"] = False
+        for v in node.values():
+            _no_extra_keys(v)
+    elif isinstance(node, list):
+        for v in node:
+            _no_extra_keys(v)
+
+
 def _strict(schema: dict[str, Any]) -> dict[str, Any]:
-    """Tool arguments are an object; unknown keys are not allowed unless the schema says so."""
+    """Tool arguments are an object; unknown keys are not allowed (at any depth) unless the schema says so."""
     s = copy.deepcopy(schema or {"type": "object", "properties": {}})
     if s.get("type") == "object" and "additionalProperties" not in s:
         s["additionalProperties"] = False
+    _no_extra_keys(s)
     # compact JSON exactly as Qwen's template writes it; flexible whitespace lets a
     # small model pad a call with endless newlines
     s["x-guidance"] = {"whitespace_flexible": False, "item_separator": ", ", "key_separator": ": "}
@@ -77,7 +90,7 @@ def _xml_param(key: str, schema: dict[str, Any]) -> str:
     if ty == "boolean":
         return f'{head} ("true" | "false" | "True" | "False") {tail}'
     if ty in ("object", "array"):
-        return f"{head} %json {json.dumps(_strict(schema) if ty == 'object' else schema)} {tail}"
+        return f"{head} %json {json.dumps(_strict(schema))} {tail}"
     # free text: a lazy lexeme that ends at the first closing tag
     return None  # handled by the caller as a lazy rule
 
