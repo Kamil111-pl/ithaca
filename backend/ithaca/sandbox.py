@@ -13,7 +13,9 @@ Backends, picked by the `sandbox.mode` setting ("auto" tries them in order):
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -22,6 +24,7 @@ from pathlib import Path
 
 from . import config, settings
 
+log = logging.getLogger("ithaca.sandbox")
 MAX_OUTPUT = 30_000
 
 
@@ -33,8 +36,34 @@ class ExecResult:
     timed_out: bool = False
 
 
+_seatbelt_checked: bool | None = None
+
+
 def _seatbelt_available() -> bool:
-    return sys.platform == "darwin" and shutil.which("sandbox-exec") is not None
+    """sandbox-exec exists *and* still enforces a profile (it is deprecated, so a
+    future macOS could keep the binary but stop enforcing). Checked once: a
+    write outside an allowed folder must be refused."""
+    global _seatbelt_checked
+    if _seatbelt_checked is not None:
+        return _seatbelt_checked
+    if sys.platform != "darwin" or not shutil.which("sandbox-exec"):
+        _seatbelt_checked = False
+        return False
+    import subprocess
+
+    with tempfile.TemporaryDirectory() as allowed, tempfile.TemporaryDirectory() as forbidden:
+        target = Path(forbidden) / "canary"
+        profile = f'(version 1)(allow default)(deny file-write*)(allow file-write* (subpath {_sb_quote(os.path.realpath(allowed))}))'
+        try:
+            subprocess.run(["sandbox-exec", "-p", profile, "/bin/sh", "-c", f"echo x > {target}"],
+                           capture_output=True, timeout=10)
+        except (OSError, subprocess.TimeoutExpired):
+            _seatbelt_checked = False
+            return False
+        _seatbelt_checked = not target.exists()
+    if not _seatbelt_checked:
+        log.warning("sandbox-exec ran but did not enforce its profile; treating Seatbelt as unavailable")
+    return _seatbelt_checked
 
 
 async def _docker_available() -> bool:
@@ -74,18 +103,24 @@ def seatbelt_profile(workspace: Path, allow_network: bool) -> str:
     home = os.path.realpath(Path.home())
     ws_paths = {str(workspace), ws_real}
     allow_ws = " ".join(f"(subpath {_sb_quote(p)})" for p in sorted(ws_paths))
-    # The per-user temp dir (for tools like xcrun that cache there) and
-    # /private/tmp are writable; the rest of /private/var/folders is not.
+    # Writes go only to the workspace (TMPDIR points inside it). The one
+    # exception is the xcrun cache that /usr/bin developer-tool shims (python3,
+    # git, clang) keep in the per-user temp dir. /tmp is NOT writable, so a
+    # symlink into it can't be used to write outside the project.
     user_tmp = os.path.realpath(tempfile.gettempdir())
+    # …and the files `mktemp` makes there by default (it ignores TMPDIR on macOS).
+    xcrun_cache = "^" + re.escape(user_tmp.rstrip("/")) + "/(xcrun_db|tmp\\.[A-Za-z0-9]+(/|$))"
     lines = [
         "(version 1)",
         "(allow default)",
         "(deny file-write*)",
-        f"(allow file-write* {allow_ws} (subpath {_sb_quote(user_tmp)}) (subpath \"/private/tmp\")"
+        f"(allow file-write* {allow_ws} (regex {_sb_quote(xcrun_cache)})"
         " (literal \"/dev/null\") (literal \"/dev/zero\") (literal \"/dev/tty\") (subpath \"/dev/fd\")"
         " (literal \"/dev/dtracehelper\"))",
         f"(deny file-read* (subpath {_sb_quote(home)}) (subpath \"/Volumes\"))",
         f"(allow file-read* {allow_ws})",
+        # no driving other apps (Finder, System Events…) from inside the sandbox
+        "(deny appleevent-send)",
     ]
     if not allow_network:
         lines += ["(deny network*)", "(allow network* (remote unix-socket))"]
