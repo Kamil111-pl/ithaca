@@ -40,6 +40,8 @@ ONCE_PER_RUN = {
                 "Approving allows it for the rest of this run; press Stop anytime.",
     "browser_act": "Ithaca wants to click and type in its browser window for this task. Approving allows it for "
                    "the rest of this run; it never types passwords, and you can press Stop anytime.",
+    "app_script": "Ithaca wants to control an app (e.g. Blender) with scripts for this task. Scripts can do anything "
+                  "that app can; approving allows it for the rest of this run.",
 }
 
 
@@ -61,7 +63,7 @@ DESTRUCTIVE_CMD = re.compile(
 def decide(tool: Tool, args: dict[str, Any], ctx: ToolContext, sandbox_backend: str) -> Decision:
     mode = settings.get("agent.approval_mode")
     effects = tool.effects
-    side_effects = effects & {"write", "exec", "external", "host", "computer", "browser_act"}
+    side_effects = effects & {"write", "exec", "external", "host", "computer", "browser_act", "app_script"}
 
     if mode == "never":
         return Decision(True)

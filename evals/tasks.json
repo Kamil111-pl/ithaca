@@ -2264,5 +2264,124 @@
    ]
   },
   "split": "dev"
+ },
+ {
+  "id": "blender-red-cube",
+  "category": "apps",
+  "needs": [
+   "blender"
+  ],
+  "prompt": "Open Blender, make a red cube, and save the scene as cube.blend.",
+  "checks": [
+   {
+    "type": "tool_called_any",
+    "names": [
+     "blender_python",
+     "blender_open"
+    ]
+   },
+   {
+    "type": "blend_check",
+    "path": "cube.blend",
+    "expr": "any(o.type=='MESH' and len(o.data.vertices)==8 for o in bpy.data.objects)"
+   },
+   {
+    "type": "blend_check",
+    "path": "cube.blend",
+    "expr": "any(m.diffuse_color[0]>0.5 and m.diffuse_color[1]<0.3 and m.diffuse_color[2]<0.3 or (m.use_nodes and any(n.type=='BSDF_PRINCIPLED' and n.inputs['Base Color'].default_value[0]>0.5 and n.inputs['Base Color'].default_value[1]<0.3 for n in m.node_tree.nodes)) for m in bpy.data.materials)"
+   }
+  ],
+  "split": "dev"
+ },
+ {
+  "id": "blender-render",
+  "category": "apps",
+  "needs": [
+   "blender"
+  ],
+  "prompt": "In Blender, make a scene with a sphere, a light and a camera pointed at the sphere, and render it to sphere.png.",
+  "checks": [
+   {
+    "type": "file_exists",
+    "path": "sphere.png"
+   },
+   {
+    "type": "tool_called",
+    "name": "blender_render"
+   }
+  ],
+  "split": "dev"
+ },
+ {
+  "id": "blender-edit-file",
+  "category": "apps",
+  "needs": [
+   "blender"
+  ],
+  "prompt": "Open scene.blend in Blender, move the cone up by 2 units, and save it.",
+  "checks": [
+   {
+    "type": "blend_check",
+    "path": "scene.blend",
+    "expr": "abs(bpy.data.objects['Cone'].location.z - 2.0) < 0.01"
+   },
+   {
+    "type": "blend_check",
+    "path": "scene.blend",
+    "expr": "'Cube' in bpy.data.objects"
+   }
+  ],
+  "split": "dev",
+  "setup": {
+   "blend_files": {
+    "scene.blend": "bpy.ops.mesh.primitive_cone_add(location=(0,0,0))\nbpy.context.object.name='Cone'\nbpy.ops.mesh.primitive_cube_add(location=(3,0,0))\nbpy.context.object.name='Cube'"
+   }
+  }
+ },
+ {
+  "id": "blender-count",
+  "category": "apps",
+  "needs": [
+   "blender"
+  ],
+  "prompt": "How many objects are in scene.blend, and which of them are lights?",
+  "checks": [
+   {
+    "type": "answer_contains",
+    "any": [
+     "3",
+     "three"
+    ]
+   },
+   {
+    "type": "answer_contains",
+    "any": [
+     "Lamp",
+     "lamp"
+    ]
+   }
+  ],
+  "split": "holdout",
+  "setup": {
+   "blend_files": {
+    "scene.blend": "bpy.ops.mesh.primitive_cube_add()\nbpy.ops.object.light_add(type='POINT', location=(2,2,3))\nbpy.context.object.name='Lamp'\nbpy.ops.object.camera_add(location=(5,-5,3))"
+   }
+  }
+ },
+ {
+  "id": "blender-array",
+  "category": "apps",
+  "needs": [
+   "blender"
+  ],
+  "prompt": "In Blender, make a row of 5 cubes spaced 3 units apart along the X axis and save it as row.blend.",
+  "checks": [
+   {
+    "type": "blend_check",
+    "path": "row.blend",
+    "expr": "sum(1 for o in bpy.data.objects if o.type=='MESH') >= 5 or any(m.type=='ARRAY' and m.count==5 for o in bpy.data.objects for m in o.modifiers)"
+   }
+  ],
+  "split": "dev"
  }
 ]
