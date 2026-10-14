@@ -563,7 +563,9 @@ def normalize_parts(raw: Any) -> tuple[list[dict[str, Any]], list[str]]:
                "offset": {"type": "array", "items": {"type": "number"}},
                "rotation": {"type": "array", "items": {"type": "number"}}},
                "required": ["name", "shape"]}},
-           "clear_scene": {"type": "boolean", "description": "remove everything else first (default true)"}}, ["parts"]),
+           "clear_scene": {"type": "boolean", "description": "remove everything else first (default true)"},
+           "separate_pieces": {"type": "boolean", "description": "true if the parts are meant to be separate objects (a scene)"}},
+          ["parts"]),
       **_APP)
 async def blender_build(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     parts, problems = normalize_parts(args.get("parts"))
@@ -585,6 +587,27 @@ async def blender_build(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
                        for m, (lo2, hi2) in boxes.items() if m != n)
         if not touching and lo[2] > eps:
             warnings.append(f"{n} is floating {lo[2]:.2f} m up, touching nothing — attach it or put it on_top_of a part.")
+    # one object should be one connected piece: group parts that touch
+    group = {n: n for n in boxes}
+
+    def find(n: str) -> str:
+        while group[n] != n:
+            group[n] = group[group[n]]
+            n = group[n]
+        return n
+
+    for n, (lo, hi) in boxes.items():
+        for m, (lo2, hi2) in boxes.items():
+            if n < m and all(lo[i] <= hi2[i] + eps and lo2[i] <= hi[i] + eps for i in range(3)):
+                group[find(n)] = find(m)
+    islands: dict[str, list[str]] = {}
+    for n in boxes:
+        islands.setdefault(find(n), []).append(n)
+    structural = []
+    if len(islands) > 1 and len(boxes) <= 40:
+        listing = "; ".join("[" + ", ".join(v) + "]" for v in islands.values())
+        structural.append(f"The parts form {len(islands)} separate pieces that don't touch: {listing}. If they belong to "
+                          "one object, connect them with on_top_of / attach instead of positions (z is up).")
     seen: dict[tuple, str] = {}
     for p in parts:  # identical centre + size = parts sitting inside each other
         key = tuple(round(c, 2) for c in placed[p["name"]]["center"]) + tuple(round(c, 2) for c in placed[p["name"]]["dims"])
@@ -641,7 +664,13 @@ if not bpy.app.background:
 print('built', len([o for o in scn.objects if o.type == 'MESH']), 'parts; size', tuple(round(v, 2) for v in (mx_ - mn)))
 """
     res = await _run_action(code, f"Built {len(parts)} parts.")
-    if warnings:
+    problems = structural + [w for w in warnings if "floating" in w or "exactly where" in w]
+    if problems and not res.is_error and not args.get("separate_pieces"):
+        res.is_error = True  # built, but wrong: make the model fix it before saving
+        res.content = ("Built, but the model has structural problems — fix them with blender_build before saving "
+                       "(set separate_pieces: true if separate pieces are intended):\n- " + "\n- ".join(problems)
+                       + "\n" + res.content)
+    elif warnings:
         res.content = "Warnings:\n- " + "\n- ".join(warnings) + "\n" + res.content
     return res
 

@@ -104,3 +104,22 @@ def test_legs_attach_under_the_corners_of_a_table_top():
         cx, cy, cz = placed[f"leg{i}"]["center"]
         assert abs(abs(cx) - 0.76) < 1e-6 and abs(abs(cy) - 0.41) < 1e-6
         assert abs((cz - 0.355) - 0.0) < 1e-6  # bottom of the leg on the floor, top under the table top
+
+
+@needs_blender
+@pytest.mark.asyncio
+async def test_disconnected_models_are_flagged_unless_intended(monkeypatch, tmp_path):
+    monkeypatch.setenv("ITHACA_BLENDER_BACKGROUND", "1")
+    monkeypatch.setenv("ITHACA_HOME", str(tmp_path))
+    ctx = ToolContext(run_id="r", conversation_id="c")
+    apart = [{"name": "trunk", "shape": "cylinder", "position": [0, 0, 0.5]},
+             {"name": "leaves", "shape": "cone", "position": [0, 3, 0.5], "color": "green"}]
+    try:
+        r = await registry.get("blender_build").handler({"parts": apart}, ctx)
+        assert r.is_error and "separate pieces" in r.content and "leaves" in r.content
+        r = await registry.get("blender_build").handler({"parts": apart, "separate_pieces": True}, ctx)
+        assert not r.is_error
+        joined = [apart[0], {"name": "leaves", "shape": "cone", "on_top_of": "trunk"}]
+        assert not (await registry.get("blender_build").handler({"parts": joined}, ctx)).is_error
+    finally:
+        await blender.shutdown_headless()
