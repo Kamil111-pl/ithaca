@@ -62,6 +62,9 @@ ensure_mlx() {
   "$MLX_VENV/bin/python" -c 'import llguidance' 2>/dev/null || "$MLX_VENV/bin/pip" install -q "llguidance==1.9.1"
 }
 
+# Local model folders under model/weights, best first (override with ITHACA_MODEL).
+DEFAULT_MODELS="qwen3.5-4b ithaca-local base"
+
 cmd="${1:-start}"; shift || true
 case "$cmd" in
   setup)
@@ -72,10 +75,10 @@ case "$cmd" in
   start)
     ensure_venv
     [ -f "$ROOT/web/dist/index.html" ] || "$ROOT/scripts/build-web.sh"
-    # Bring up the local model too (unless ITHACA_NO_MODEL=1), preferring the
-    # distilled ithaca-local weights over the stock base.
+    # Bring up the local model too (unless ITHACA_NO_MODEL=1): ITHACA_MODEL if set,
+    # else Qwen3.5-4B (85.7% on the eval suite vs 65.7% for Qwen3-4B "base").
     if [ -z "${ITHACA_NO_MODEL:-}" ] && ! curl -sf -o /dev/null -m 2 http://127.0.0.1:8080/health; then
-      for w in ithaca-local base; do
+      for w in ${ITHACA_MODEL:-} $DEFAULT_MODELS; do
         if [ -d "$ROOT/model/weights/$w" ]; then
           echo "→ Starting local model ($w) on :8080 — log: $ITHACA_HOME/mlx-server.log"
           nohup "$ROOT/model/ithaca-model.sh" serve "$w" > "$ITHACA_HOME/mlx-server.log" 2>&1 &

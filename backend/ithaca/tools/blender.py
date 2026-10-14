@@ -121,7 +121,9 @@ def _format(r: dict[str, Any], note: str = "") -> ToolResult:
     return ToolResult("\n".join(lines), is_error=not r.get("ok"), data={"scene": scene})
 
 
-_APP = dict(effects={"app_script"}, group="apps", keywords="blender 3d model render scene mesh object animation bpy")
+BLENDER_WORDS = frozenset({"blender", ".blend", "bpy", "3d", "3-d", "mesh", "render"})
+_APP = dict(effects={"app_script"}, group="apps", gate=BLENDER_WORDS,
+            keywords="blender 3d model render scene mesh object animation bpy")
 
 
 @tool("blender_open",
@@ -140,7 +142,8 @@ async def blender_open(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 
 
 @tool("blender_python",
-      "Run Python inside Blender (bpy is imported) to model, edit materials, animate or set up the scene. "
+      "Blender only: run a bpy script inside the Blender 3D app to model, edit materials, animate or set up the scene "
+      "(for general Python, use run_command). "
       "Starts Blender if needed. Returns printed output, any error, and the scene's objects afterwards. "
       "Keep each script small and check the result before the next step.",
       obj({"code": {"type": "string", "description": "Python using bpy, e.g. bpy.ops.mesh.primitive_cube_add(size=2)"}},
@@ -157,7 +160,7 @@ async def blender_python(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
 
 
 @tool("blender_scene", "Describe the open Blender scene: objects, positions, materials, camera, render engine.",
-      effects={"read"}, group="apps", keywords="blender scene objects list inspect")
+      effects={"read"}, group="apps", gate=BLENDER_WORDS, keywords="blender scene objects list inspect")
 async def blender_scene(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
     if not await bridge_alive():
         return ToolResult("Blender isn't open under Ithaca's control. Use blender_open first.", is_error=True)

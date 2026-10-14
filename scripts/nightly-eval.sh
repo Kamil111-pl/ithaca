@@ -9,8 +9,10 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HOME_DIR="${ITHACA_HOME:-$HOME/.ithaca}"
 LOG="$HOME_DIR/eval-nightly.log"
-MODEL="base"
-[ -d "$ROOT/model/weights/ithaca-local" ] && MODEL="ithaca-local"
+MODEL=""
+for w in ${ITHACA_MODEL:-} qwen3.5-4b ithaca-local base; do  # same order as ./ithaca start
+  [ -d "$ROOT/model/weights/$w" ] && { MODEL="$w"; break; }
+done
 
 started_model=""
 if ! curl -sf -o /dev/null -m 2 http://127.0.0.1:8080/health; then

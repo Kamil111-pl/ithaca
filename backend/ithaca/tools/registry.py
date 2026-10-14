@@ -69,6 +69,9 @@ class Tool:
     untrusted_output: bool = False
     trusted_external: bool = False
     keywords: str = ""
+    # Search only offers this tool when the query mentions one of these words
+    # (an app's tools shouldn't win generic requests like "use Python").
+    gate: frozenset[str] = frozenset()
 
     def spec(self) -> ToolSpec:
         return ToolSpec(self.name, self.description, self.parameters)
@@ -98,7 +101,9 @@ class Registry:
     def search(self, query: str, limit: int = 6, exclude: set[str] | None = None) -> list[Tool]:
         """BM25 over name, group, description and keywords."""
         exclude = exclude or set()
-        docs = [t for t in self.all() if t.name not in exclude and not t.core]
+        q_low = query.lower()
+        docs = [t for t in self.all() if t.name not in exclude and not t.core
+                and (not t.gate or any(g in q_low for g in t.gate))]
         if not docs:
             return []
         q_terms = _terms(query)
@@ -159,6 +164,7 @@ def tool(
     core: bool = False,
     untrusted_output: bool = False,
     keywords: str = "",
+    gate: set[str] | frozenset[str] = frozenset(),
 ):
     """Decorator that registers an async handler as a tool."""
 
@@ -173,6 +179,7 @@ def tool(
             core=core,
             untrusted_output=untrusted_output,
             keywords=keywords,
+            gate=frozenset(gate),
         ))
         return fn
 
