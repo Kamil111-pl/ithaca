@@ -124,7 +124,11 @@ class OpenAICompatProvider:
             # Mac; off unless the user turns it on. Templates without the switch ignore it.
             from .. import settings
 
-            body["chat_template_kwargs"] = {"enable_thinking": bool(settings.get("agent.local_thinking"))}
+            # A think budget turns thinking on but caps it (the server forces </think>).
+            budget = int(settings.get("agent.think_budget") or 0)
+            body["chat_template_kwargs"] = {"enable_thinking": bool(settings.get("agent.local_thinking")) or budget > 0}
+            if budget > 0:
+                body["ithaca_think_budget"] = budget
 
         partial: dict[int, dict[str, Any]] = {}
         usage: dict[str, int] = {}

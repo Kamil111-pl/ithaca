@@ -46,4 +46,27 @@ def test_blender_tools_only_match_blender_requests():
     generic = [t.name for t in registry.search("Use Python to compute 2 to the power of 20", limit=10)]
     assert not any(n.startswith("blender_") for n in generic)
     blendery = [t.name for t in registry.search("open Blender and make a red cube", limit=6)]
-    assert "blender_python" in blendery
+    assert "blender_add_object" in blendery  # the ready-made action beats raw Python
+
+
+@needs_blender
+@pytest.mark.asyncio
+async def test_ready_made_actions_build_a_renderable_scene(monkeypatch, tmp_path):
+    monkeypatch.setenv("ITHACA_BLENDER_BACKGROUND", "1")
+    monkeypatch.setenv("ITHACA_HOME", str(tmp_path))
+    ctx = ToolContext(run_id="r", conversation_id="c")
+    call = lambda n, **a: registry.get(n).handler(a, ctx)  # noqa: E731
+    try:
+        assert not (await call("blender_delete", all=True)).is_error
+        r = await call("blender_add_object", kind="cube", name="Box", color="red", location=[0, 0, 0])
+        assert not r.is_error and "Box (MESH)" in r.content and "Red" in r.content
+        r = await call("blender_transform", object="Box", move_by=[0, 0, 2])
+        assert not r.is_error and "[0.0, 0.0, 2.0]" in r.content
+        r = await call("blender_transform", object="Nope", move_by=[0, 0, 2])
+        assert r.is_error and "Box" in r.content  # lists real objects
+        r = await call("blender_aim_camera", target="Box")
+        assert not r.is_error and "camera" in r.content.lower()
+        r = await call("blender_render", path="box.png", width=160, height=90)
+        assert not r.is_error and (config.WORKSPACE_DIR / "box.png").exists()
+    finally:
+        await blender.shutdown_headless()

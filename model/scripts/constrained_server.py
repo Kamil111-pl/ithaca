@@ -222,6 +222,29 @@ class ToolCallConstraint:
             return logits
 
 
+class ThinkBudget:
+    """Cap how long a thinking model thinks: after `budget` tokens inside <think>,
+    force `</think>` so it has to act. Generation starts inside the think block
+    (the chat template opens it); once it closes, this does nothing."""
+
+    def __init__(self, budget: int, close_id: int) -> None:
+        self.budget, self.close_id = budget, close_id
+        self.count, self.started, self.done = 0, False, False
+
+    def __call__(self, tokens: mx.array, logits: mx.array) -> mx.array:
+        if self.done:
+            return logits
+        if self.started and int(tokens[-1].item()) == self.close_id:
+            self.done = True
+            return logits
+        self.started = True
+        self.count += 1
+        if self.count <= self.budget:
+            return logits
+        only_close = mx.arange(logits.shape[-1]) == self.close_id
+        return mx.where(only_close, mx.zeros_like(logits), mx.full(logits.shape, -float("inf"), dtype=logits.dtype))
+
+
 # ----------------------------------------------------------------- patches
 
 _orig_make_lp = server._make_logits_processors
@@ -232,9 +255,11 @@ _orig_handle = server.APIHandler.handle_completion
 def _handle_completion(self, request, stop_words):
     # Ithaca sends every real tool in `ithaca_grammar_tools` (the prompt only
     # describes the loaded ones); calls may name any of them.
-    extra = self.body.get("ithaca_grammar_tools") if isinstance(self.body, dict) else None
+    body = self.body if isinstance(self.body, dict) else {}
+    extra = body.get("ithaca_grammar_tools")
     if extra and getattr(request, "tools", None):
         request.ithaca_grammar_tools = extra
+    request.ithaca_think_budget = int(body.get("ithaca_think_budget") or 0)
     return _orig_handle(self, request, stop_words)
 
 
@@ -244,11 +269,18 @@ def _generate(self, request, args, *a, **kw):
     # read its tokenizer when the logits processors are made (in that thread).
     args.ithaca_tools = getattr(request, "ithaca_grammar_tools", None) or getattr(request, "tools", None) or []
     args.ithaca_provider = self.model_provider
+    args.ithaca_think_budget = getattr(request, "ithaca_think_budget", 0)
     return _orig_generate(self, request, args, *a, **kw)
 
 
 def _make_logits_processors(args):
     procs = list(_orig_make_lp(args))
+    budget = getattr(args, "ithaca_think_budget", 0)
+    btok = getattr(getattr(args, "ithaca_provider", None), "tokenizer", None)
+    if budget and btok is not None:
+        close_id = btok._tokenizer.get_vocab().get(THINK_CLOSE)
+        if close_id is not None:
+            procs.insert(0, ThinkBudget(budget, close_id))
     tools = getattr(args, "ithaca_tools", None)
     provider = getattr(args, "ithaca_provider", None)
     tok = getattr(provider, "tokenizer", None) if tools else None

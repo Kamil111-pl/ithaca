@@ -216,3 +216,166 @@ async def shutdown_headless() -> None:
         _proc.terminate()
     _proc = None
     _state_file().unlink(missing_ok=True)
+
+
+# ------------------------------------------------------- ready-made actions
+# Common operations as tested bpy snippets, so a small model fills in values
+# instead of writing Blender code (which it often gets wrong).
+
+COLORS = {"red": (0.8, 0.05, 0.05), "green": (0.1, 0.6, 0.15), "blue": (0.05, 0.2, 0.8), "yellow": (0.9, 0.8, 0.05),
+          "orange": (0.9, 0.4, 0.05), "purple": (0.45, 0.1, 0.7), "pink": (0.9, 0.4, 0.6), "white": (0.9, 0.9, 0.9),
+          "black": (0.02, 0.02, 0.02), "gray": (0.4, 0.4, 0.4), "grey": (0.4, 0.4, 0.4), "brown": (0.35, 0.18, 0.07),
+          "cyan": (0.05, 0.7, 0.8), "gold": (0.85, 0.65, 0.1), "silver": (0.75, 0.75, 0.78)}
+
+PRIMITIVES = {"cube": "primitive_cube_add", "sphere": "primitive_uv_sphere_add", "cylinder": "primitive_cylinder_add",
+              "cone": "primitive_cone_add", "plane": "primitive_plane_add", "torus": "primitive_torus_add",
+              "monkey": "primitive_monkey_add", "ico_sphere": "primitive_ico_sphere_add"}
+
+
+def _rgb(color: str) -> tuple[float, float, float] | None:
+    c = color.strip().lower()
+    if c in COLORS:
+        return COLORS[c]
+    hexed = c.lstrip("#")
+    if len(hexed) == 6 and all(ch in "0123456789abcdef" for ch in hexed):
+        return tuple(int(hexed[i:i + 2], 16) / 255 for i in (0, 2, 4))  # type: ignore[return-value]
+    return None
+
+
+def _vec(v: Any, default: tuple[float, float, float] = (0, 0, 0)) -> tuple[float, float, float]:
+    if isinstance(v, (list, tuple)) and len(v) == 3:
+        return tuple(float(x) for x in v)  # type: ignore[return-value]
+    return default
+
+
+SET_COLOR = """
+def _ithaca_color(obj, rgb, name):
+    mat = bpy.data.materials.get(name) or bpy.data.materials.new(name)
+    mat.diffuse_color = (*rgb, 1.0)
+    if not mat.use_nodes:
+        mat.use_nodes = True
+    for n in mat.node_tree.nodes:
+        if n.type == 'BSDF_PRINCIPLED':
+            n.inputs['Base Color'].default_value = (*rgb, 1.0)
+    if obj.data is not None and hasattr(obj.data, 'materials'):
+        obj.data.materials.clear()
+        obj.data.materials.append(mat)
+"""
+
+
+async def _run_action(code: str, note: str) -> ToolResult:
+    err = await ensure_blender()
+    if err:
+        return ToolResult(err, is_error=True)
+    r = await _send("import bpy, math, mathutils\n" + SET_COLOR + code)
+    return _format(r, note if r.get("ok") else "")
+
+
+def _find(name: str) -> str:
+    return (f"obj = bpy.data.objects.get({name!r})\n"
+            f"if obj is None:\n    raise RuntimeError('No object named ' + {name!r} + '. Objects: ' + ', '.join(o.name for o in bpy.data.objects))\n")
+
+
+@tool("blender_add_object",
+      "Blender: add an object — kind is cube, sphere, cylinder, cone, plane, torus, monkey, ico_sphere, camera, or "
+      "light — at a location, optionally named, sized and coloured (e.g. color 'red' or '#ff8800').",
+      obj({"kind": {"type": "string", "enum": [*PRIMITIVES, "camera", "light"]},
+           "name": {"type": "string"},
+           "location": {"type": "array", "items": {"type": "number"}, "description": "[x, y, z]"},
+           "size": {"type": "number", "description": "overall size in metres (default 2 for meshes)"},
+           "color": {"type": "string"}}, ["kind"]),
+      **_APP)
+async def blender_add_object(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
+    kind, loc = args["kind"], _vec(args.get("location"))
+    if kind == "camera":
+        code = f"bpy.ops.object.camera_add(location={loc})\nobj = bpy.context.object\nbpy.context.scene.camera = obj\n"
+    elif kind == "light":
+        code = f"bpy.ops.object.light_add(type='SUN', location={loc})\nobj = bpy.context.object\nobj.data.energy = 3.0\n"
+    else:
+        size = float(args.get("size") or 2)
+        sizing = {"cube": f"size={size}", "plane": f"size={size}", "monkey": f"size={size}",
+                  "sphere": f"radius={size / 2}", "ico_sphere": f"radius={size / 2}", "cylinder": f"radius={size / 2}, depth={size}",
+                  "cone": f"radius1={size / 2}, depth={size}", "torus": f"major_radius={size / 2}, minor_radius={size / 8}"}[kind]
+        code = f"bpy.ops.mesh.{PRIMITIVES[kind]}({sizing}, location={loc})\nobj = bpy.context.object\n"
+    if args.get("name"):
+        code += f"obj.name = {args['name']!r}\n"
+    if args.get("color") and kind not in ("camera", "light"):
+        rgb = _rgb(args["color"])
+        if rgb is None:
+            return ToolResult(f"Unknown colour {args['color']!r}; use a name like red/blue or a hex code like #ff8800.", is_error=True)
+        code += f"_ithaca_color(obj, {rgb}, {args['color'].strip().capitalize()!r})\n"
+    code += "print('added', obj.name)\n"
+    return await _run_action(code, f"Added a {kind}.")
+
+
+@tool("blender_set_color", "Blender: give an object a colour (name like 'red' or hex like '#ff8800').",
+      obj({"object": {"type": "string"}, "color": {"type": "string"}}, ["object", "color"]), **_APP)
+async def blender_set_color(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
+    rgb = _rgb(args["color"])
+    if rgb is None:
+        return ToolResult(f"Unknown colour {args['color']!r}; use a name like red/blue or a hex code like #ff8800.", is_error=True)
+    code = _find(args["object"]) + f"_ithaca_color(obj, {rgb}, {args['color'].strip().capitalize()!r})\nprint('coloured', obj.name)\n"
+    return await _run_action(code, f"Coloured {args['object']} {args['color']}.")
+
+
+@tool("blender_transform",
+      "Blender: move, rotate or scale an object. location sets an absolute position; move_by shifts it "
+      "(e.g. [0, 0, 2] = up 2); rotation is in degrees [x, y, z]; scale is [x, y, z] or one number.",
+      obj({"object": {"type": "string"},
+           "location": {"type": "array", "items": {"type": "number"}},
+           "move_by": {"type": "array", "items": {"type": "number"}},
+           "rotation": {"type": "array", "items": {"type": "number"}},
+           "scale": {"type": "number"}}, ["object"]),
+      **_APP)
+async def blender_transform(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
+    code = _find(args["object"])
+    if args.get("location") is not None:
+        code += f"obj.location = {_vec(args['location'])}\n"
+    if args.get("move_by") is not None:
+        code += f"obj.location = obj.location + mathutils.Vector({_vec(args['move_by'])})\n"
+    if args.get("rotation") is not None:
+        code += f"obj.rotation_euler = tuple(math.radians(a) for a in {_vec(args['rotation'])})\n"
+    if args.get("scale") is not None:
+        s = float(args["scale"])
+        code += f"obj.scale = ({s}, {s}, {s})\n"
+    code += "print(obj.name, 'at', tuple(round(v, 3) for v in obj.location))\n"
+    return await _run_action(code, f"Updated {args['object']}.")
+
+
+@tool("blender_aim_camera",
+      "Blender: point the scene camera at an object so it's framed for a render. Adds a camera (and a light, if the "
+      "scene has none) when missing.",
+      obj({"target": {"type": "string", "description": "object to look at"},
+           "distance": {"type": "number", "description": "metres from the target (default 10)"}}, ["target"]),
+      **_APP)
+async def blender_aim_camera(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
+    d = float(args.get("distance") or 10)
+    code = _find(args["target"]) + f"""
+scn = bpy.context.scene
+cam = scn.camera
+if cam is None:
+    bpy.ops.object.camera_add()
+    cam = bpy.context.object
+    scn.camera = cam
+target = obj.matrix_world.translation
+cam.location = target + mathutils.Vector(({d} * 0.6, -{d} * 0.6, {d} * 0.45))
+direction = target - cam.location
+cam.rotation_euler = direction.to_track_quat('-Z', 'Y').to_euler()
+if not any(o.type == 'LIGHT' for o in scn.objects):
+    bpy.ops.object.light_add(type='SUN', location=(target.x + 3, target.y - 3, target.z + 8))
+    bpy.context.object.data.energy = 3.0
+print('camera', cam.name, 'aimed at', obj.name)
+"""
+    return await _run_action(code, f"Camera aimed at {args['target']}.")
+
+
+@tool("blender_delete", "Blender: delete an object by name, or every object with all=true (for a fresh scene).",
+      obj({"object": {"type": "string"}, "all": {"type": "boolean"}}), **_APP)
+async def blender_delete(args: dict[str, Any], ctx: ToolContext) -> ToolResult:
+    if args.get("all"):
+        code = "for o in list(bpy.data.objects):\n    bpy.data.objects.remove(o, do_unlink=True)\nprint('cleared')\n"
+        return await _run_action(code, "Removed every object.")
+    if not args.get("object"):
+        return ToolResult("Say which object to delete, or all=true.", is_error=True)
+    code = _find(args["object"]) + "bpy.data.objects.remove(obj, do_unlink=True)\nprint('deleted')\n"
+    return await _run_action(code, f"Deleted {args['object']}.")
