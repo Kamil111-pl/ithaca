@@ -240,8 +240,12 @@ async def run_task(task: dict, args) -> dict:
     for d in setup.get("documents", []):
         documents.create(d["title"], d["content"])
     now = time.time()
-    for i, minutes in enumerate(setup.get("focus_today_minutes", [])):
-        start = now - (i + 1) * 3600
+    # sessions spread over the part of today that has passed, so "today" holds at any hour
+    midnight = time.mktime(time.localtime(now)[:3] + (0, 0, 0, 0, 0, -1))
+    sessions = setup.get("focus_today_minutes", [])
+    for i, minutes in enumerate(sessions):
+        start = max(midnight + 1, min(midnight + (now - midnight) * (i + 0.1) / (len(sessions) + 1),
+                                      now - minutes * 60 - 1))
         db.execute("INSERT INTO focus_sessions (id, mode, label, planned_s, actual_s, completed, started_at, ended_at) "
                    "VALUES (?, 'focus', '', ?, ?, 1, ?, ?)", (db.new_id("f_"), minutes * 60, minutes * 60, start, start + minutes * 60))
 

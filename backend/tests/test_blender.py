@@ -40,3 +40,10 @@ async def test_headless_blender_round_trip(monkeypatch, tmp_path):
         assert not r.is_error and (config.WORKSPACE_DIR / "t.blend").exists()
     finally:
         await blender.shutdown_headless()
+
+
+def test_blender_tools_only_match_blender_requests():
+    generic = [t.name for t in registry.search("Use Python to compute 2 to the power of 20", limit=10)]
+    assert not any(n.startswith("blender_") for n in generic)
+    blendery = [t.name for t in registry.search("open Blender and make a red cube", limit=6)]
+    assert "blender_python" in blendery
