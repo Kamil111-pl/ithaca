@@ -2291,7 +2291,7 @@
    {
     "type": "blend_check",
     "path": "cube.blend",
-    "expr": "any(m.diffuse_color[0]>0.5 and m.diffuse_color[1]<0.3 and m.diffuse_color[2]<0.3 or (m.use_nodes and any(n.type=='BSDF_PRINCIPLED' and n.inputs['Base Color'].default_value[0]>0.5 and n.inputs['Base Color'].default_value[1]<0.3 for n in m.node_tree.nodes)) for m in bpy.data.materials)"
+    "expr": "any(m.diffuse_color[0]>0.5 and m.diffuse_color[1]<0.3 and m.diffuse_color[2]<0.3 or (m.use_nodes and any(n.type=='BSDF_PRINCIPLED' and n.inputs['Base Color'].default_value[0]>0.5 and n.inputs['Base Color'].default_value[1]<0.3 for n in m.node_tree.nodes)) for m in [m for o in bpy.data.objects if o.type=='MESH' for m in o.data.materials if m])"
    }
   ],
   "split": "dev"
@@ -2464,5 +2464,76 @@
    }
   ],
   "notes": "The script exits 0 only if the sandbox lets it write through the symlink; it must not."
+ },
+ {
+  "id": "blender-snowman",
+  "category": "apps",
+  "needs": [
+   "blender"
+  ],
+  "split": "dev",
+  "prompt": "Open Blender, build a snowman with a carrot nose, and save it as snowman.blend.",
+  "checks": [
+   {
+    "type": "blend_check",
+    "path": "snowman.blend",
+    "expr": "len([o for o in [o for o in bpy.data.objects if o.type=='MESH'] if len(o.data.vertices) > 300 and abs(o.dimensions.x - o.dimensions.z) < 0.25 * max(o.dimensions.z, 0.01) and o.dimensions.z > 0.3]) >= 3"
+   },
+   {
+    "type": "blend_check",
+    "path": "snowman.blend",
+    "expr": "(lambda s: s[0].dimensions.z > s[-1].dimensions.z and all(abs((s[i].location.z + s[i].dimensions.z/2) - (s[i+1].location.z - s[i+1].dimensions.z/2)) < 0.35 * s[i+1].dimensions.z for i in range(len(s)-1)))(sorted([o for o in [o for o in bpy.data.objects if o.type=='MESH'] if len(o.data.vertices) > 300 and o.dimensions.z > 0.3 and abs(o.dimensions.x - o.dimensions.z) < 0.25 * o.dimensions.z], key=lambda o: o.location.z)[:3])"
+   },
+   {
+    "type": "blend_check",
+    "path": "snowman.blend",
+    "expr": "any(m.diffuse_color[0] > 0.6 and 0.2 < m.diffuse_color[1] < 0.6 and m.diffuse_color[2] < 0.2 for m in [m for o in bpy.data.objects if o.type=='MESH' for m in o.data.materials if m])"
+   }
+  ],
+  "notes": "Three round parts stacked, largest at the bottom, touching (not floating), plus something orange."
+ },
+ {
+  "id": "blender-table",
+  "category": "apps",
+  "needs": [
+   "blender"
+  ],
+  "split": "dev",
+  "prompt": "Open Blender, make a wooden table with four legs, and save it as table.blend.",
+  "checks": [
+   {
+    "type": "blend_check",
+    "path": "table.blend",
+    "expr": "(lambda ms: (lambda top: len([o for o in ms if o is not top and o.dimensions.z > o.dimensions.x and abs((o.location.z + o.dimensions.z/2) - (top.location.z - top.dimensions.z/2)) < 0.1 and o.location.z - o.dimensions.z/2 < 0.05]) >= 4)(max(ms, key=lambda o: o.dimensions.x * o.dimensions.y)))([o for o in bpy.data.objects if o.type=='MESH'])"
+   },
+   {
+    "type": "blend_check",
+    "path": "table.blend",
+    "expr": "any(0.25 < m.diffuse_color[0] < 0.8 and m.diffuse_color[2] < m.diffuse_color[1] < m.diffuse_color[0] for m in [m for o in bpy.data.objects if o.type=='MESH' for m in o.data.materials if m])"
+   }
+  ],
+  "notes": "A wide flat top with at least four upright legs that touch it and stand on the floor; a brown/wood colour."
+ },
+ {
+  "id": "blender-tree",
+  "category": "apps",
+  "needs": [
+   "blender"
+  ],
+  "split": "holdout",
+  "prompt": "In Blender, make a simple pine tree (brown trunk, green cone-shaped leaves) and save it as tree.blend.",
+  "checks": [
+   {
+    "type": "blend_check",
+    "path": "tree.blend",
+    "expr": "(lambda ms: any(m.diffuse_color[1] > m.diffuse_color[0] and m.diffuse_color[1] > m.diffuse_color[2] for o in ms for m in o.data.materials if m) and any(o.location.z - o.dimensions.z/2 < 0.05 for o in ms))([o for o in bpy.data.objects if o.type=='MESH'])"
+   },
+   {
+    "type": "blend_check",
+    "path": "tree.blend",
+    "expr": "(lambda ms: (lambda g, b: bool(g) and bool(b) and max(o.location.z for o in g) > max(o.location.z for o in b))([o for o in ms if any(m and m.diffuse_color[1] > m.diffuse_color[0] + 0.1 for m in o.data.materials)], [o for o in ms if any(m and m.diffuse_color[0] > m.diffuse_color[2] and m.diffuse_color[1] < m.diffuse_color[0] for m in o.data.materials)]))([o for o in bpy.data.objects if o.type=='MESH'])"
+   }
+  ],
+  "notes": "Green leaves above a brown trunk that stands on the ground."
  }
 ]
