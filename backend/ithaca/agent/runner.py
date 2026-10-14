@@ -397,7 +397,7 @@ async def _preload_tools(live: LiveRun, ctx: ToolContext, user_text: str) -> Non
         events.append(live.conversation_id, live.id, "tools_loaded", {"loaded": found})
 
 
-ACTION_EFFECTS = {"host", "write", "exec", "external", "computer"}
+ACTION_EFFECTS = {"host", "write", "exec", "external", "computer", "app_script"}
 PASSIVE_TOOLS = {"tool_search", "memory_search", "current_time"}
 
 

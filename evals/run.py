@@ -5,6 +5,7 @@
     ./ithaca eval --category browser --repeat 3      # flakiness: pass rate over 3 attempts each
     ./ithaca eval --split dev                        # tasks you may look at while tuning
     ./ithaca eval --learn                            # learned procedures: dev tasks teach, holdout tasks measure
+    ./ithaca eval --apps --category apps             # also drive real apps headless (Blender)
     ./ithaca eval --kind anthropic --model claude-opus-5-5   # reference run (ANTHROPIC_API_KEY)
     python evals/run.py --validate                   # check tasks.json (CI does this)
 
@@ -77,6 +78,24 @@ def _memories() -> list[str]:
     return [m["content"] for m in memory.list_all()]
 
 
+def _blender_run(path: Path | None, code: str) -> str:
+    import subprocess
+
+    from ithaca.tools.blender import blender_binary
+
+    args = [blender_binary(), "--background", "--factory-startup"] + ([str(path)] if path else []) + ["--python-expr", code]
+    return subprocess.run(args, capture_output=True, text=True, timeout=180).stdout
+
+
+def _blend_check(r, path: str, expr: str) -> bool:
+    """Open a .blend the agent saved, headless, and evaluate `expr` (bpy in scope)."""
+    p = _workspace(r, path)
+    if not p.exists():
+        return False
+    code = f"import bpy\nprint('ITHACA_RESULT', bool({expr}))"
+    return "ITHACA_RESULT True" in _blender_run(p, code)
+
+
 CHECKS: dict[str, tuple[tuple[str, ...], Callable[[dict, dict], bool]]] = {
     # tools
     "tool_called": (("name",), lambda c, r: c["name"] in r["calls"]),
@@ -124,11 +143,12 @@ CHECKS: dict[str, tuple[tuple[str, ...], Callable[[dict, dict], bool]]] = {
     "reminder_added": (("text",), lambda c, r: any(_has(x["title"], c["text"]) for x in r["mac"].reminders)),
     "reminder_in_list": (("text",), lambda c, r: any(_has(x["list"], c["text"]) for x in r["mac"].reminders)),
     "reminder_due": (("text",), lambda c, r: any(_has(x["due"], c["text"]) for x in r["mac"].reminders)),
+    "blend_check": (("path", "expr"), lambda c, r: _blend_check(r, c["path"], c["expr"])),
     "host_not_called": (("tool",), lambda c, r: not any(x["tool"] == c["tool"] for x in r["mac"].calls)),
 }
 
-SETUP_KEYS = {"files", "memories", "documents", "focus_today_minutes", "web", "browser"}
-TASK_KEYS = {"id", "category", "prompt", "checks", "setup", "approvals", "split", "notes"}
+SETUP_KEYS = {"files", "memories", "documents", "focus_today_minutes", "web", "browser", "blend_files"}
+TASK_KEYS = {"id", "category", "prompt", "checks", "setup", "approvals", "split", "notes", "needs"}
 
 
 def validate(tasks: list[dict]) -> list[str]:
@@ -209,6 +229,12 @@ async def run_task(task: dict, args) -> dict:
         p = config.WORKSPACE_DIR / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content)
+    for rel, code in setup.get("blend_files", {}).items():
+        out = config.WORKSPACE_DIR / rel
+        _blender_run(None, "import bpy\nbpy.ops.object.select_all(action='SELECT')\nbpy.ops.object.delete()\n"
+                     + code + f"\nbpy.ops.wm.save_as_mainfile(filepath={str(out)!r})")
+    os.environ["ITHACA_BLENDER_BACKGROUND"] = "1"
+    os.environ["ITHACA_HOME"] = str(tmp)
     for m in setup.get("memories", []):
         await memory.save(m)
     for d in setup.get("documents", []):
@@ -262,6 +288,9 @@ async def run_task(task: dict, args) -> dict:
         watcher.cancel()
     elapsed = time.monotonic() - started
     sim_mac.uninstall()
+    from ithaca.tools import blender as blender_tools
+
+    await blender_tools.shutdown_headless()
     if args.learn and task.get("split", "dev") == "dev":
         _carry_out()  # only dev tasks teach; holdout tasks are only measured
 
@@ -292,6 +321,8 @@ async def run_task(task: dict, args) -> dict:
 
 
 def _select(tasks: list[dict], args) -> list[dict]:
+    if not args.apps:  # app tasks run real (headless) apps whose scripts aren't sandboxed: opt-in
+        tasks = [t for t in tasks if not t.get("needs")]
     if args.only:
         wanted = set(args.only.split(","))
         tasks = [t for t in tasks if t["id"] in wanted]
@@ -336,7 +367,7 @@ async def main_async(args) -> int:
         return 1 if errors else 0
 
     _isolate()
-    from ithaca.tools import builtin, browser, mac  # noqa: F401 - register tools (never `computer`: it drives the real screen)
+    from ithaca.tools import blender, browser, builtin, mac  # noqa: F401 - register tools (never `computer`: it drives the real screen)
 
     errors = validate(tasks)
     if errors:
@@ -413,6 +444,8 @@ def main() -> None:
     ap.add_argument("--tolerance", type=float, default=3.0, help="allowed drop in pass rate, in points")
     ap.add_argument("--learn", action="store_true",
                     help="learned procedures on: dev tasks run first and teach, holdout tasks use what was learned")
+    ap.add_argument("--apps", action="store_true",
+                    help="also run tasks that drive real apps headless (Blender); their scripts aren't sandboxed")
     ap.add_argument("--validate", action="store_true", help="only check tasks.json")
     ap.add_argument("-v", "--verbose", action="store_true", help="show failed checks")
     sys.exit(asyncio.run(main_async(ap.parse_args())))

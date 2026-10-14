@@ -25,6 +25,7 @@ DEFAULTS: dict[str, Any] = {
     "agent.local_temperature": 0.3,
     "agent.learn_procedures": True,
     "agent.local_thinking": False,
+    "apps.blender_path": "",
     # Inject the most relevant memories into each turn.
     "memory.auto_recall": True,
     # auto | seatbelt | docker | off

@@ -21,7 +21,7 @@ from .agent.runner import manager as runs
 from .agent.runner import mark_interrupted_runs
 from .mcp_client import manager as mcp
 from .providers.base import ProviderError
-from .tools import browser, builtin, computer, mac  # noqa: F401 - registers tools
+from .tools import blender, browser, builtin, computer, mac  # noqa: F401 - registers tools
 from .tools.builtin import describe_all
 
 log = logging.getLogger("ithaca")
