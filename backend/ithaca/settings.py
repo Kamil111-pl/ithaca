@@ -25,6 +25,7 @@ DEFAULTS: dict[str, Any] = {
     "agent.local_temperature": 0.3,
     "agent.learn_procedures": True,
     "agent.local_thinking": False,
+    "agent.think_budget": 0,  # >0: local models think, capped at this many tokens per reply
     "apps.blender_path": "",
     # Inject the most relevant memories into each turn.
     "memory.auto_recall": True,

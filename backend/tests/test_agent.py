@@ -280,3 +280,30 @@ async def test_local_server_crash_is_restarted_and_retried(monkeypatch):
     assert restarts == [("http://127.0.0.1:8080/v1", "m")]
     assert seen[-1]["status"] == "done"
     assert "recovered" in "".join(e.get("text", "") for e in seen if e["type"] == "text")
+
+
+@pytest.mark.asyncio
+async def test_claiming_success_after_a_failed_action_is_challenged(monkeypatch):
+    fake = FakeProvider([
+        [call("edit_file", {"path": "missing.txt", "old": "a", "new": "b"}, "t1")],
+        [{"type": "text", "text": "Done! I've updated missing.txt."}],
+        [{"type": "text", "text": "Sorry, that didn't work: missing.txt doesn't exist."}],
+    ])
+    cid = _setup(monkeypatch, fake)
+    await _run(cid, "change a to b in missing.txt")
+    rows = events.list_for(cid)
+    notes = [r for r in rows if r["type"] == "runtime_note"]
+    assert notes and "failed" in notes[0]["data"]["content"]
+    final = [r for r in rows if r["type"] == "assistant_message"][-1]["data"]["content"]
+    assert "didn't work" in final
+
+
+@pytest.mark.asyncio
+async def test_honest_failure_reports_are_left_alone(monkeypatch):
+    fake = FakeProvider([
+        [call("edit_file", {"path": "missing.txt", "old": "a", "new": "b"}, "t1")],
+        [{"type": "text", "text": "I couldn't edit missing.txt because it doesn't exist."}],
+    ])
+    cid = _setup(monkeypatch, fake)
+    await _run(cid, "change a to b in missing.txt")
+    assert not [r for r in events.list_for(cid) if r["type"] == "runtime_note"]

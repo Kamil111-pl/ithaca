@@ -218,6 +218,7 @@ async def run_task(task: dict, args) -> dict:
     settings.set("agent.tool_loading", args.tool_loading)
     settings.set("browser.target", "auto")
     settings.set("agent.learn_procedures", bool(args.learn))
+    settings.set("agent.think_budget", args.think_budget)
     if args.learn:
         _carry_in()
     if args.kind == "anthropic":
@@ -425,7 +426,7 @@ async def main_async(args) -> int:
 
     REPORTS.mkdir(exist_ok=True)
     out = REPORTS / f"{time.strftime('%Y%m%d-%H%M%S')}-{args.model.replace('/', '_')}.json"
-    current = {"model": args.model, "url": args.url, "pass_rate": rate, "total": n, "repeat": args.repeat,
+    current = {"model": args.model, "url": args.url, "think_budget": args.think_budget, "pass_rate": rate, "total": n, "repeat": args.repeat,
                "split": args.split, "tool_loading": args.tool_loading, "by_category": {c: sum(v) / len(v) for c, v in by_cat.items()},
                "created": time.time(), "tasks": report}
     out.write_text(json.dumps(current, indent=1))
@@ -463,6 +464,8 @@ def main() -> None:
                     help="learned procedures on: dev tasks run first and teach, holdout tasks use what was learned")
     ap.add_argument("--apps", action="store_true",
                     help="also run tasks that drive real apps headless (Blender); their scripts aren't sandboxed")
+    ap.add_argument("--think-budget", type=int, default=0,
+                    help="local models think, capped at this many tokens per reply (0 = no thinking)")
     ap.add_argument("--validate", action="store_true", help="only check tasks.json")
     ap.add_argument("-v", "--verbose", action="store_true", help="show failed checks")
     sys.exit(asyncio.run(main_async(ap.parse_args())))

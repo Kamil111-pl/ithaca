@@ -224,6 +224,7 @@ async def _execute(live: LiveRun, user_text: str, provider_id: str, model: str,
         max_rounds = int(settings.get("agent.max_rounds") or 24)
         seen_calls: dict[str, int] = {}
         nudged = False
+        honesty_nudged = False
         plan_nudges = 0
         if tools_enabled:
             await _preload_tools(live, ctx, user_text)
@@ -303,6 +304,17 @@ async def _execute(live: LiveRun, user_text: str, provider_id: str, model: str,
                             "one now. If a step is already done, mark it with update_plan; if it can't be done, say why.")
                     events.append(conv, live.id, "runtime_note", {"content": note})
                     await live.publish({"type": "status", "message": "Continuing the plan…"})
+                    continue
+                failure = _unresolved_failure(conv, live.id)
+                if failure and not honesty_nudged and _claims_success_despite("".join(text_parts)):
+                    # The last attempt at an action failed, yet the reply says it worked.
+                    honesty_nudged = True
+                    name, err = failure
+                    note = (f"Your last {name} call failed: {err[:300]} Nothing changed, so don't say it worked. "
+                            "Fix the problem and try again if you can; otherwise tell the user plainly that it "
+                            "didn't work and why.")
+                    events.append(conv, live.id, "runtime_note", {"content": note})
+                    await live.publish({"type": "status", "message": "Checking that claim against the tool results…"})
                     continue
                 if not nudged and _should_nudge(conv, live.id, "".join(text_parts)):
                     # Small models often announce or even claim an action without
@@ -420,6 +432,39 @@ DENIAL_RE = re.compile(r"\b(?:i (?:don't|do not|can't|cannot|am unable to|'m una
 
 def _claims_action(text: str) -> bool:
     return bool(CLAIM_RE.search(text or "") or INTENT_RE.search(text or "") or DENIAL_RE.search(text or ""))
+
+
+SUCCESS_RE = re.compile(
+    r"\b(done|all set|successfully|i(?:'ve| have)? (?:now )?(?:added|created|removed|deleted|updated|saved|written|wrote|"
+    r"appended|moved|renamed|opened|sent|set|made|changed|fixed|installed)|has been (?:added|created|removed|deleted|"
+    r"updated|saved|written|appended|moved|sent|set|made|changed|fixed))\b", re.I)
+ADMITS_RE = re.compile(r"\b(couldn'?t|could not|can'?t|cannot|failed|fails|error|unable|not able|wasn'?t able|denied|"
+                       r"blocked|not permitted|didn'?t work|did not work|no permission|isn'?t possible)\b", re.I)
+
+
+def _claims_success_despite(text: str) -> bool:
+    return bool(SUCCESS_RE.search(text or "")) and not ADMITS_RE.search(text or "")
+
+
+def _unresolved_failure(conversation_id: str, run_id: str) -> tuple[str, str] | None:
+    """The most recent action tool whose last call in this run failed and was never
+    followed by a successful action, as (tool name, error)."""
+    names: dict[str, str] = {}
+    last: tuple[str, str] | None = None
+    for r in events.list_for(conversation_id):
+        if r["run_id"] != run_id:
+            continue
+        d = r["data"]
+        if r["type"] == "assistant_message":
+            for c in d.get("tool_calls") or []:
+                names[c["id"]] = c["name"]
+        elif r["type"] == "tool_result":
+            name = d.get("name") or names.get(d.get("tool_call_id"), "")
+            tool = registry.get(name)
+            if tool is None or not (tool.effects & (ACTION_EFFECTS | {"browser_act"})):
+                continue
+            last = (name, str(d.get("content") or "")) if d.get("is_error") else None
+    return last
 
 
 def _should_nudge(conversation_id: str, run_id: str, final_text: str = "") -> bool:
