@@ -223,3 +223,114 @@ async def now_playing() -> dict[str, Any] | None:
     return {"name": item.get("name"), "by": ", ".join(a.get("name", "") for a in item.get("artists") or []),
             "uri": item.get("uri"), "is_playing": bool(body.get("is_playing")),
             "context": (body.get("context") or {}).get("uri"), "device": (body.get("device") or {}).get("name")}
+
+
+# ------------------------------------------------- no-setup mode (desktop app)
+# Without a connected account, Ithaca still works with the Spotify app on this
+# Mac: a web search finds real open.spotify.com links, and Spotify's own
+# AppleScript dictionary plays them and reports what's playing.
+
+import re as _re
+
+_LINK = _re.compile(r"open\.spotify\.com/(?:intl-[a-z-]+/)?(track|album|playlist|artist)/([A-Za-z0-9]{22})")
+
+
+def link_to_uri(url: str) -> tuple[str, str] | None:
+    m = _LINK.search(url or "")
+    return (m.group(1), f"spotify:{m.group(1)}:{m.group(2)}") if m else None
+
+
+def _clean_title(title: str) -> tuple[str, str]:
+    t = _re.sub(r"\s*[|·-]\s*Spotify(?: Playlist)?\s*$", "", title or "", flags=_re.I).strip()
+    by = ""
+    m = _re.search(r"^(.*?)\s*-\s*(?:song and lyrics by|song by|playlist by|album by)\s+(.*)$", t, _re.I)
+    if m:
+        t, by = m.group(1).strip(), m.group(2).strip()
+    return t, by
+
+
+async def web_search(query: str, kinds: list[str], limit: int = 5) -> dict[str, list[dict[str, Any]]]:
+    """Find real Spotify links with a normal web search (no account needed)."""
+    from . import web
+
+    out: dict[str, list[dict[str, Any]]] = {k: [] for k in kinds}
+    seen: set[str] = set()
+    queries = [f"{query} spotify"] + [f"{query} {k} spotify" for k in kinds if k != "track"]
+    for q in queries:
+        try:
+            results = await web.search(q, limit=10)
+        except Exception:  # noqa: BLE001 - one failed query shouldn't sink the rest
+            continue
+        for r in results:
+            hit = link_to_uri(r.get("url", ""))
+            if not hit or hit[1] in seen or hit[0] not in out or len(out[hit[0]]) >= limit:
+                continue
+            seen.add(hit[1])
+            name, by = _clean_title(r.get("title", ""))
+            out[hit[0]].append({"kind": hit[0], "name": name or hit[1], "uri": hit[1], "by": by})
+    return out
+
+
+class Desktop:
+    """The Spotify app on this Mac, through its AppleScript dictionary."""
+
+    async def _osa(self, script: str) -> tuple[int, str]:
+        proc = await asyncio.create_subprocess_exec("osascript", "-e", script, stdout=asyncio.subprocess.PIPE,
+                                                    stderr=asyncio.subprocess.STDOUT)
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=20)
+        return proc.returncode or 0, out.decode().strip()
+
+    def available(self) -> bool:
+        from pathlib import Path
+
+        return sys.platform == "darwin" and any(Path(p).exists() for p in (
+            "/Applications/Spotify.app", str(Path.home() / "Applications/Spotify.app")))
+
+    async def ensure_running(self) -> None:
+        code, out = await self._osa('return application "Spotify" is running')
+        if out != "true":
+            subprocess.run(["open", "-a", "Spotify"], capture_output=True)
+            for _ in range(20):
+                await asyncio.sleep(0.5)
+                code, out = await self._osa('return application "Spotify" is running')
+                if out == "true":
+                    await asyncio.sleep(1.5)  # let it finish loading
+                    return
+
+    async def play(self, uri: str) -> None:
+        await self.ensure_running()
+        code, out = await self._osa(f'tell application "Spotify" to play track "{uri}"')
+        if code:
+            raise SpotifyError(f"The Spotify app couldn't play that: {out}")
+
+    async def control(self, action: str, volume: int | None = None) -> None:
+        await self.ensure_running()
+        script = {"pause": "pause", "resume": "play", "next": "next track", "previous": "previous track",
+                  "shuffle_on": "set shuffling to true", "shuffle_off": "set shuffling to false",
+                  "volume": f"set sound volume to {int(volume or 50)}"}[action]
+        code, out = await self._osa(f'tell application "Spotify" to {script}')
+        if code:
+            raise SpotifyError(f"The Spotify app didn't respond: {out}")
+
+    async def now_playing(self) -> dict[str, Any] | None:
+        code, out = await self._osa('if application "Spotify" is running then\n tell application "Spotify"\n'
+                                    '  if player state is stopped then return ""\n'
+                                    '  return (player state as text) & "\\n" & (name of current track) & "\\n" & '
+                                    '(artist of current track) & "\\n" & (spotify url of current track)\n end tell\nend if\nreturn ""')
+        parts = out.split("\n")
+        if code or len(parts) < 4:
+            return None
+        return {"name": parts[1], "by": parts[2], "uri": parts[3], "is_playing": parts[0] == "playing",
+                "context": None, "device": "Spotify on this Mac"}
+
+
+desktop: Desktop | None = Desktop()  # evals replace this with a fake
+
+
+def mode() -> str:
+    """'api' (connected account), 'desktop' (the app on this Mac), or 'none'."""
+    if _load().get("refresh_token"):
+        return "api"
+    if desktop is not None and desktop.available():
+        return "desktop"
+    return "none"

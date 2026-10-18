@@ -158,12 +158,86 @@ class FakeSpotify:
         return httpx.Response(404, json={"error": {"status": 404, "message": f"unknown endpoint {path}"}})
 
 
-def connect(fake: FakeSpotify | None) -> None:
-    """Point ithaca.spotify at the fake and mark the account connected (or not, when fake is None)."""
+def _id22(s: str) -> str:
+    import hashlib
+
+    return hashlib.sha256(s.encode()).hexdigest()[:22]
+
+
+class FakeDesktop:
+    """The Spotify app on this Mac, simulated: plays links found by web search; records what happened."""
+
+    def __init__(self, spec: dict[str, Any]) -> None:
+        self.items: dict[str, dict[str, Any]] = {}
+        for t in spec.get("tracks", []):
+            self.items[f"spotify:track:{_id22(t['name'])}"] = {"kind": "track", "name": t["name"], "by": t.get("artist", ""),
+                                                             "genres": t.get("genres", [])}
+        for p in spec.get("playlists", []):
+            self.items[f"spotify:playlist:{_id22(p['name'])}"] = {"kind": "playlist", "name": p["name"],
+                                                                "by": p.get("owner", "Spotify"),
+                                                                "description": p.get("description", "")}
+        self.tracks = [u for u, i in self.items.items() if i["kind"] == "track"]
+        self.played: list[str] = []
+        self.actions: list[str] = []
+        self.current: str | None = None
+        self.is_playing = False
+        if spec.get("playing"):
+            self.current = next((u for u in self.tracks if self.items[u]["name"] == spec["playing"]["track"]), None)
+            self.is_playing = self.current is not None
+
+    def web_pages(self) -> dict[str, str]:
+        """What a web search can find: open.spotify.com pages for the catalog."""
+        pages = {}
+        for uri, i in self.items.items():
+            kind, sid = uri.split(":")[1:]
+            label = "song and lyrics by" if kind == "track" else f"{kind} by"
+            desc = i.get("description", "") or " ".join(i.get("genres", []))
+            pages[f"https://open.spotify.com/{kind}/{sid}"] = f"{i['name']} - {label} {i['by']} | Spotify\n{desc} {i['by']}"
+        return pages
+
+    def name_of(self, uri: str) -> str:
+        i = self.items.get(uri) or {}
+        return f"{i.get('name', '')} {i.get('by', '')} {i.get('description', '')} {' '.join(i.get('genres', []))}"
+
+    def available(self) -> bool:
+        return True
+
+    async def play(self, uri: str) -> None:
+        from ithaca.spotify import SpotifyError
+
+        if uri not in self.items:
+            raise SpotifyError("The Spotify app couldn't play that: not found")
+        self.played.append(uri)
+        self.current = uri if uri.startswith("spotify:track:") else (self.tracks[0] if self.tracks else uri)
+        self.is_playing = True
+
+    async def control(self, action: str, volume: int | None = None) -> None:
+        self.actions.append(action if action != "volume" else f"volume:{volume}")
+        if action == "pause":
+            self.is_playing = False
+        elif action == "resume":
+            self.is_playing = True
+        elif action in ("next", "previous") and self.current in self.tracks:
+            i = self.tracks.index(self.current)
+            self.current = self.tracks[(i + (1 if action == "next" else -1)) % len(self.tracks)]
+
+    async def now_playing(self) -> dict[str, Any] | None:
+        if not self.current:
+            return None
+        i = self.items.get(self.current, {"name": "Track", "by": ""})
+        return {"name": i["name"], "by": i["by"], "uri": self.current, "is_playing": self.is_playing,
+                "context": None, "device": "Spotify on this Mac"}
+
+
+def connect(fake: FakeSpotify | None, desktop: FakeDesktop | None = None) -> None:
+    """Point ithaca.spotify at fakes: `fake` = connected account (or None = not connected);
+    `desktop` = simulated Spotify app (None = no app). Never the real app."""
     from ithaca import db, settings, spotify
 
+    spotify.desktop = desktop
     if fake is None:
         spotify.transport = None
+        db.execute("DELETE FROM integrations WHERE name = 'spotify'")
         return
     settings.set("spotify.client_id", "test-client")
     spotify.transport = fake.transport()

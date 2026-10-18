@@ -97,6 +97,8 @@ def _blend_check(r, path: str, expr: str) -> bool:
 
 
 def _spotify_name(fake, uri: str) -> str:
+    if hasattr(fake, "name_of"):  # simulated desktop app
+        return fake.name_of(uri)
     for item in fake.tracks + fake.playlists + fake.artists:
         if item["uri"] == uri:
             return item["name"] + " " + item.get("artist", "") + " " + item.get("description", "")
@@ -277,12 +279,18 @@ async def run_task(task: dict, args) -> dict:
     # the simulated world
     from sim_spotify import FakeSpotify, connect as spotify_connect
 
+    from sim_spotify import FakeDesktop
+
     sp = setup.get("spotify")
-    fake_spotify = FakeSpotify(sp) if sp is not None and sp.get("connected", True) else None
-    spotify_connect(fake_spotify)
+    desktop_mode = sp is not None and sp.get("mode") == "desktop"
+    fake_spotify = FakeSpotify(sp) if sp is not None and sp.get("connected", True) and not desktop_mode else None
+    fake_desktop = FakeDesktop(sp) if desktop_mode else None
+    spotify_connect(fake_spotify, fake_desktop)  # never the real Spotify app
     if sp is not None and not sp.get("connected", True):
         settings.set("spotify.client_id", "")
-    pages = setup.get("web", {})
+    pages = dict(setup.get("web", {}))
+    if fake_desktop:
+        pages.update(fake_desktop.web_pages())
     sim_browser = SimBrowser(setup.get("browser", {}).get("sites"), pages)
     sim_mac = SimMac(sim_browser)
     sim_mac.shortcuts = list(setup.get("shortcuts", []))
@@ -296,7 +304,11 @@ async def run_task(task: dict, args) -> dict:
         raise web.WebError("This page is not available in the eval sandbox.")
 
     async def fake_search(query, limit=8):
-        return [{"title": v.splitlines()[0], "url": k, "snippet": v[:160]} for k, v in pages.items()][:limit]
+        words = [w for w in re.findall(r"[a-z0-9]+", query.lower()) if len(w) > 2 and w not in ("spotify", "the", "and", "music")]
+        hits = [(sum(w in (k + " " + v).lower() for w in words), k, v) for k, v in pages.items()]
+        hits = [h for h in hits if h[0] > 0 or not words] or [(0, k, v) for k, v in pages.items()]
+        hits.sort(key=lambda h: -h[0])
+        return [{"title": v.splitlines()[0], "url": k, "snippet": v[:160]} for _, k, v in hits][:limit]
 
     async def public(url):
         return None
@@ -328,7 +340,7 @@ async def run_task(task: dict, args) -> dict:
     from ithaca.tools import blender as blender_tools
 
     await blender_tools.shutdown_headless()
-    spotify_connect(None)
+    spotify_connect(None, None)
     if args.learn and task.get("split", "dev") == "dev":
         _carry_out()  # only dev tasks teach; holdout tasks are only measured
 
@@ -340,7 +352,7 @@ async def run_task(task: dict, args) -> dict:
         "calls": calls, "answer": answers[-1] if answers else "", "status": finished.get("status"),
         "approvals": [r for r in rows if r["type"] == "approval_requested"],
         "workspace": config.WORKSPACE_DIR, "browser": sim_browser, "mac": sim_mac, "outside": tmp / "outside",
-        "outside_original": setup.get("outside", {}), "spotify": fake_spotify,
+        "outside_original": setup.get("outside", {}), "spotify": fake_spotify or fake_desktop,
     }
     results = []
     for chk in task["checks"]:

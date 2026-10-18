@@ -71,7 +71,7 @@ def test_documents_and_focus(client):
 
     now = time.time()
     client.post("/api/focus/sessions", headers=H, json={"mode": "focus", "label": "writing", "planned_s": 1500,
-                                                         "actual_s": 1500, "completed": True, "started_at": now - 1500, "ended_at": now})
+                                                         "actual_s": 1500, "completed": True, "started_at": now - 5, "ended_at": now})
     stats = client.get("/api/focus/stats").json()
     assert stats["today_seconds"] == 1500 and stats["streak"] == 1 and stats["labels"][0]["label"] == "writing"
 

@@ -3072,5 +3072,281 @@
    ]
   },
   "split": "holdout"
+ },
+ {
+  "id": "desktop-style-play",
+  "category": "music",
+  "split": "dev",
+  "prompt": "go onto spotify and play me some house music in the style of Volen Sentir",
+  "setup": {
+   "spotify": {
+    "tracks": [
+     {
+      "name": "Bloom",
+      "artist": "Volen Sentir",
+      "genres": [
+       "melodic house",
+       "organic house"
+      ]
+     },
+     {
+      "name": "Nightfall",
+      "artist": "Volen Sentir",
+      "genres": [
+       "melodic house"
+      ]
+     },
+     {
+      "name": "Awake",
+      "artist": "Tycho",
+      "genres": [
+       "chillwave"
+      ]
+     },
+     {
+      "name": "Dive",
+      "artist": "Tycho",
+      "genres": [
+       "chillwave"
+      ]
+     },
+     {
+      "name": "Levitating",
+      "artist": "Dua Lipa",
+      "genres": [
+       "pop"
+      ]
+     },
+     {
+      "name": "So What",
+      "artist": "Miles Davis",
+      "genres": [
+       "jazz"
+      ]
+     }
+    ],
+    "playlists": [
+     {
+      "name": "Volen Sentir Radio",
+      "description": "melodic organic house like Volen Sentir"
+     },
+     {
+      "name": "Melodic House Essentials",
+      "description": "deep melodic and organic house"
+     },
+     {
+      "name": "Today's Top Hits",
+      "description": "pop hits"
+     },
+     {
+      "name": "Jazz Classics",
+      "description": "jazz standards"
+     }
+    ],
+    "devices": [
+     {
+      "name": "MacBook Pro",
+      "type": "Computer"
+     }
+    ],
+    "mode": "desktop"
+   }
+  },
+  "checks": [
+   {
+    "type": "spotify_played",
+    "any": [
+     "volen",
+     "melodic house",
+     "organic house"
+    ]
+   }
+  ],
+  "notes": "No account connected: the Spotify app on the Mac plays what a web search finds."
+ },
+ {
+  "id": "desktop-skip",
+  "category": "music",
+  "split": "holdout",
+  "prompt": "Next song please, and tell me what it is.",
+  "setup": {
+   "spotify": {
+    "tracks": [
+     {
+      "name": "Bloom",
+      "artist": "Volen Sentir",
+      "genres": [
+       "melodic house",
+       "organic house"
+      ]
+     },
+     {
+      "name": "Nightfall",
+      "artist": "Volen Sentir",
+      "genres": [
+       "melodic house"
+      ]
+     },
+     {
+      "name": "Awake",
+      "artist": "Tycho",
+      "genres": [
+       "chillwave"
+      ]
+     },
+     {
+      "name": "Dive",
+      "artist": "Tycho",
+      "genres": [
+       "chillwave"
+      ]
+     },
+     {
+      "name": "Levitating",
+      "artist": "Dua Lipa",
+      "genres": [
+       "pop"
+      ]
+     },
+     {
+      "name": "So What",
+      "artist": "Miles Davis",
+      "genres": [
+       "jazz"
+      ]
+     }
+    ],
+    "playlists": [
+     {
+      "name": "Volen Sentir Radio",
+      "description": "melodic organic house like Volen Sentir"
+     },
+     {
+      "name": "Melodic House Essentials",
+      "description": "deep melodic and organic house"
+     },
+     {
+      "name": "Today's Top Hits",
+      "description": "pop hits"
+     },
+     {
+      "name": "Jazz Classics",
+      "description": "jazz standards"
+     }
+    ],
+    "devices": [
+     {
+      "name": "MacBook Pro",
+      "type": "Computer"
+     }
+    ],
+    "mode": "desktop",
+    "playing": {
+     "track": "Bloom"
+    }
+   }
+  },
+  "checks": [
+   {
+    "type": "spotify_action",
+    "action": "next"
+   },
+   {
+    "type": "answer_contains",
+    "any": [
+     "Nightfall"
+    ]
+   }
+  ]
+ },
+ {
+  "id": "desktop-play-artist",
+  "category": "music",
+  "split": "dev",
+  "prompt": "Put on some Tycho.",
+  "setup": {
+   "spotify": {
+    "tracks": [
+     {
+      "name": "Bloom",
+      "artist": "Volen Sentir",
+      "genres": [
+       "melodic house",
+       "organic house"
+      ]
+     },
+     {
+      "name": "Nightfall",
+      "artist": "Volen Sentir",
+      "genres": [
+       "melodic house"
+      ]
+     },
+     {
+      "name": "Awake",
+      "artist": "Tycho",
+      "genres": [
+       "chillwave"
+      ]
+     },
+     {
+      "name": "Dive",
+      "artist": "Tycho",
+      "genres": [
+       "chillwave"
+      ]
+     },
+     {
+      "name": "Levitating",
+      "artist": "Dua Lipa",
+      "genres": [
+       "pop"
+      ]
+     },
+     {
+      "name": "So What",
+      "artist": "Miles Davis",
+      "genres": [
+       "jazz"
+      ]
+     }
+    ],
+    "playlists": [
+     {
+      "name": "Volen Sentir Radio",
+      "description": "melodic organic house like Volen Sentir"
+     },
+     {
+      "name": "Melodic House Essentials",
+      "description": "deep melodic and organic house"
+     },
+     {
+      "name": "Today's Top Hits",
+      "description": "pop hits"
+     },
+     {
+      "name": "Jazz Classics",
+      "description": "jazz standards"
+     }
+    ],
+    "devices": [
+     {
+      "name": "MacBook Pro",
+      "type": "Computer"
+     }
+    ],
+    "mode": "desktop"
+   }
+  },
+  "checks": [
+   {
+    "type": "spotify_played",
+    "any": [
+     "tycho",
+     "awake",
+     "dive"
+    ]
+   }
+  ]
  }
 ]
