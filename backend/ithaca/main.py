@@ -21,7 +21,7 @@ from .agent.runner import manager as runs
 from .agent.runner import mark_interrupted_runs
 from .mcp_client import manager as mcp
 from .providers.base import ProviderError
-from .tools import blender, browser, builtin, computer, mac  # noqa: F401 - registers tools
+from .tools import blender, browser, builtin, computer, mac, music, shortcuts  # noqa: F401 - registers tools
 from .tools.builtin import describe_all
 
 log = logging.getLogger("ithaca")
@@ -45,7 +45,8 @@ app = FastAPI(title="Ithaca", lifespan=lifespan)
 _ALLOWED_HOSTS = {"localhost", "127.0.0.1", "[::1]"} | {
     h.strip() for h in os.environ.get("ITHACA_ALLOWED_HOSTS", "").split(",") if h.strip()
 }
-_OPEN_PATHS = {"/api/health", "/api/auth/status", "/api/auth/setup", "/api/auth/login", "/api/mcp/oauth/callback"}
+_OPEN_PATHS = {"/api/health", "/api/auth/status", "/api/auth/setup", "/api/auth/login", "/api/mcp/oauth/callback",
+               "/api/integrations/spotify/callback"}
 
 
 def _hostname(host_header: str) -> str:
@@ -894,6 +895,48 @@ async def mcp_oauth_callback(state: str = "", code: str = "", error: str = "", e
         msg = "This sign-in link has expired. Start the sign-in again from Ithaca's settings."
     page = f"""<!doctype html><meta charset=utf-8><title>Ithaca</title>
 <body style="font:16px -apple-system,system-ui;background:#141414;color:#f5f5f7;display:grid;place-items:center;height:100vh;margin:0">
+<div style="text-align:center"><div style="font-size:40px">{'✓' if ok else '⚠️'}</div><p>{msg}</p></div>
+<script>{'setTimeout(()=>window.close(),1500)' if ok else ''}</script></body>"""
+    return HTMLResponse(page, status_code=200 if ok else 400)
+
+
+@app.get("/api/integrations/spotify")
+async def spotify_status() -> dict[str, Any]:
+    from . import spotify
+
+    return spotify.status()
+
+
+@app.post("/api/integrations/spotify/connect")
+async def spotify_connect() -> dict[str, str]:
+    from . import spotify
+
+    try:
+        return {"url": spotify.start_auth()}
+    except spotify.SpotifyError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.delete("/api/integrations/spotify")
+async def spotify_disconnect() -> dict[str, bool]:
+    from . import spotify
+
+    spotify.disconnect()
+    return {"ok": True}
+
+
+@app.get("/api/integrations/spotify/callback", include_in_schema=False)
+async def spotify_callback(state: str = "", code: str = "", error: str = ""):
+    """Spotify sends the browser here after sign-in; matched to the pending sign-in by its unguessable state."""
+    from fastapi.responses import HTMLResponse
+
+    from . import spotify
+
+    ok = bool(code) and not error and await spotify.complete_auth(state, code)
+    msg = ("Spotify is connected. You can close this tab and return to Ithaca." if ok else
+           f"Spotify sign-in didn't complete{': ' + error if error else ''}. Start it again from Ithaca's settings.")
+    page = f"""<!doctype html><meta charset=utf-8><title>Ithaca</title>
+<body style="font:16px -apple-system,system-ui;background:#070707;color:#fbfbfb;display:grid;place-items:center;height:100vh;margin:0">
 <div style="text-align:center"><div style="font-size:40px">{'✓' if ok else '⚠️'}</div><p>{msg}</p></div>
 <script>{'setTimeout(()=>window.close(),1500)' if ok else ''}</script></body>"""
     return HTMLResponse(page, status_code=200 if ok else 400)

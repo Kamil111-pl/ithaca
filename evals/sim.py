@@ -349,7 +349,22 @@ class SimMac:
                 self.notes.append({"title": "", "body": m.group(1), "folder": "Notes"})
             return ToolResult("(script ran)")
 
-        fakes = {"open_app": open_app, "open_url": open_url, "notes_create": notes_create, "reminders_add": reminders_add,
+        async def shortcuts_list(args, ctx):
+            names = getattr(self, "shortcuts", [])
+            return ToolResult("The user's Shortcuts:\n" + "\n".join(f"- {n}" for n in names) if names
+                              else "The user has no Shortcuts yet.")
+
+        async def shortcuts_run(args, ctx):
+            names = getattr(self, "shortcuts", [])
+            if args["name"] not in names:
+                return ToolResult(f"No shortcut named “{args['name']}”. Use shortcuts_list.", is_error=True)
+            return ToolResult(f"Ran “{args['name']}”.")
+
+        async def open_app_link(args, ctx):
+            return ToolResult(f"Opened {args['url']}.")
+
+        fakes = {"shortcuts_list": shortcuts_list, "shortcuts_run": shortcuts_run, "open_app_link": open_app_link,
+                 "open_app": open_app, "open_url": open_url, "notes_create": notes_create, "reminders_add": reminders_add,
                  "open_in_app": open_in_app, "run_applescript": run_applescript}
         installed = []
         self._originals = getattr(self, "_originals", {})

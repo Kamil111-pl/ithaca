@@ -96,6 +96,13 @@ def _blend_check(r, path: str, expr: str) -> bool:
     return "ITHACA_RESULT True" in _blender_run(p, code)
 
 
+def _spotify_name(fake, uri: str) -> str:
+    for item in fake.tracks + fake.playlists + fake.artists:
+        if item["uri"] == uri:
+            return item["name"] + " " + item.get("artist", "") + " " + item.get("description", "")
+    return ""
+
+
 CHECKS: dict[str, tuple[tuple[str, ...], Callable[[dict, dict], bool]]] = {
     # tools
     "tool_called": (("name",), lambda c, r: c["name"] in r["calls"]),
@@ -148,10 +155,15 @@ CHECKS: dict[str, tuple[tuple[str, ...], Callable[[dict, dict], bool]]] = {
                           and {p.relative_to(r["outside"]).as_posix() for p in r["outside"].rglob("*") if p.is_file()}
                           == set(r["outside_original"])),
     "blend_check": (("path", "expr"), lambda c, r: _blend_check(r, c["path"], c["expr"])),
+    "spotify_played": (("any",), lambda c, r: r["spotify"] is not None and any(
+        _has(u + " " + _spotify_name(r["spotify"], u), w) for u in r["spotify"].played for w in c["any"])),
+    "spotify_not_played": ((), lambda c, r: r["spotify"] is None or not r["spotify"].played),
+    "spotify_action": (("action",), lambda c, r: r["spotify"] is not None and any(a.startswith(c["action"]) for a in r["spotify"].actions)),
+    "shortcut_ran": (("name",), lambda c, r: any(x["tool"] == "shortcuts_run" and x["args"].get("name") == c["name"] for x in r["mac"].calls)),
     "host_not_called": (("tool",), lambda c, r: not any(x["tool"] == c["tool"] for x in r["mac"].calls)),
 }
 
-SETUP_KEYS = {"files", "memories", "documents", "focus_today_minutes", "web", "browser", "blend_files", "outside", "symlinks"}
+SETUP_KEYS = {"files", "memories", "documents", "focus_today_minutes", "web", "browser", "blend_files", "outside", "symlinks", "spotify", "shortcuts"}
 TASK_KEYS = {"id", "category", "prompt", "checks", "setup", "approvals", "split", "notes", "needs"}
 
 
@@ -263,9 +275,17 @@ async def run_task(task: dict, args) -> dict:
                    "VALUES (?, 'focus', '', ?, ?, 1, ?, ?)", (db.new_id("f_"), minutes * 60, minutes * 60, start, start + minutes * 60))
 
     # the simulated world
+    from sim_spotify import FakeSpotify, connect as spotify_connect
+
+    sp = setup.get("spotify")
+    fake_spotify = FakeSpotify(sp) if sp is not None and sp.get("connected", True) else None
+    spotify_connect(fake_spotify)
+    if sp is not None and not sp.get("connected", True):
+        settings.set("spotify.client_id", "")
     pages = setup.get("web", {})
     sim_browser = SimBrowser(setup.get("browser", {}).get("sites"), pages)
     sim_mac = SimMac(sim_browser)
+    sim_mac.shortcuts = list(setup.get("shortcuts", []))
     sim_mac.install()
     browser_tools.bridge = sim_browser
 
@@ -308,6 +328,7 @@ async def run_task(task: dict, args) -> dict:
     from ithaca.tools import blender as blender_tools
 
     await blender_tools.shutdown_headless()
+    spotify_connect(None)
     if args.learn and task.get("split", "dev") == "dev":
         _carry_out()  # only dev tasks teach; holdout tasks are only measured
 
@@ -319,7 +340,7 @@ async def run_task(task: dict, args) -> dict:
         "calls": calls, "answer": answers[-1] if answers else "", "status": finished.get("status"),
         "approvals": [r for r in rows if r["type"] == "approval_requested"],
         "workspace": config.WORKSPACE_DIR, "browser": sim_browser, "mac": sim_mac, "outside": tmp / "outside",
-        "outside_original": setup.get("outside", {}),
+        "outside_original": setup.get("outside", {}), "spotify": fake_spotify,
     }
     results = []
     for chk in task["checks"]:
@@ -385,7 +406,7 @@ async def main_async(args) -> int:
         return 1 if errors else 0
 
     _isolate()
-    from ithaca.tools import blender, browser, builtin, mac  # noqa: F401 - register tools (never `computer`: it drives the real screen)
+    from ithaca.tools import blender, browser, builtin, mac, music, shortcuts  # noqa: F401 - register tools (never `computer`: it drives the real screen)
 
     errors = validate(tasks)
     if errors:

@@ -1,4 +1,4 @@
-import { Chrome, Copy, Cpu, Download, Eye, Mic, Monitor, FlaskConical, KeyRound, LogOut, Plug, Plus, RefreshCw, ServerCog, Shield, Sparkles, Star, Trash2, Wrench } from "lucide-react";
+import { AppWindow, Chrome, Copy, Cpu, Download, Eye, Mic, Monitor, FlaskConical, KeyRound, LogOut, Plug, Plus, RefreshCw, ServerCog, Shield, Sparkles, Star, Trash2, Wrench } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Dialog, Segmented, Switch } from "../components/Dialog";
 import { Glass } from "../components/Glass";
@@ -27,6 +27,7 @@ export function SettingsView() {
         <AgentSettings />
         <SandboxSettings />
         <BrowserSettings />
+        <ConnectedApps />
         <ComputerUse />
         <VoiceSettings />
         <WebAndMemory />
@@ -581,6 +582,68 @@ function Account() {
           <label className="field"><span>New password</span><input className="input" type="password" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} /><small>At least 8 characters.</small></label>
         </Dialog>
       )}
+    </Glass>
+  );
+}
+
+interface SpotifyStatus {
+  configured: boolean;
+  connected: boolean;
+  account?: { name?: string; product?: string } | null;
+  redirect_uri: string;
+}
+
+/** Apps Ithaca reaches through their official channels: Spotify's Web API, Apple Shortcuts, app links. */
+function ConnectedApps() {
+  const { settings, saveSettings, toast } = useApp();
+  const [st, setSt] = useState<SpotifyStatus | null>(null);
+  const [clientId, setClientId] = useState("");
+  const load = useCallback(() => api.get<SpotifyStatus>("/api/integrations/spotify").then(setSt).catch(() => {}), []);
+  useEffect(() => {
+    load();
+    setClientId(String(settings["spotify.client_id"] ?? ""));
+  }, [load, settings]);
+  useEffect(() => {
+    const t = setInterval(load, 4000); // pick up the result of the sign-in tab
+    return () => clearInterval(t);
+  }, [load]);
+  const connect = async () => {
+    try {
+      if (clientId.trim() !== settings["spotify.client_id"]) await saveSettings({ "spotify.client_id": clientId.trim() });
+      const { url } = await api.post<{ url: string }>("/api/integrations/spotify/connect", {});
+      window.open(url, "_blank", "noopener");
+    } catch (e) {
+      toast((e as Error).message, true);
+    }
+  };
+  return (
+    <Glass as="section" className="section">
+      <h3><AppWindow size={18} /> Connected apps</h3>
+      <p>Ithaca works with your apps through the ways they officially support: Spotify's own API, your Apple Shortcuts, and app links.</p>
+      <Row title="Spotify" hint={st?.connected ? `Connected${st.account?.name ? ` as ${st.account.name}` : ""}${st.account?.product && st.account.product !== "premium" ? " — playback control needs Premium" : ""}` : "Search and play music on your account."}>
+        {st?.connected ? (
+          <button className="btn sm ghost" onClick={async () => { await api.del("/api/integrations/spotify"); load(); }}>Disconnect</button>
+        ) : (
+          <button className="btn sm primary" disabled={!clientId.trim()} onClick={connect}>Connect</button>
+        )}
+      </Row>
+      {!st?.connected && (
+        <div style={{ display: "grid", gap: 10, margin: "4px 0 10px" }}>
+          <ol className="muted" style={{ margin: 0, paddingLeft: 18, fontSize: 13, display: "grid", gap: 4 }}>
+            <li>Go to <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noreferrer">developer.spotify.com/dashboard</a> and create an app (any name; tick “Web API”).</li>
+            <li>Add this Redirect URI to the app: <span className="mono">{st?.redirect_uri ?? "http://127.0.0.1:7100/api/integrations/spotify/callback"}</span>{" "}
+              <button className="icon-btn" style={{ width: 26, height: 26 }} aria-label="Copy" onClick={() => { navigator.clipboard.writeText(st?.redirect_uri ?? ""); toast("Copied"); }}><Copy size={13} /></button></li>
+            <li>Paste the app's Client ID below and press Connect, then sign in on Spotify's page.</li>
+          </ol>
+          <input className="input" placeholder="Spotify Client ID" value={clientId} onChange={(e) => setClientId(e.target.value)} />
+        </div>
+      )}
+      <Row title="Apple Shortcuts" hint="Ithaca can list and run your Shortcuts — and every app action they can use. Make them in the Shortcuts app.">
+        <span className="badge">ready</span>
+      </Row>
+      <Row title="App links" hint="Opens apps straight at the right screen (spotify:, music:, slack:, notion:, …).">
+        <span className="badge">ready</span>
+      </Row>
     </Glass>
   );
 }

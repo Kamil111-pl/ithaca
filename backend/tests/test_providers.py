@@ -55,3 +55,10 @@ def test_string_arguments_are_coerced_to_schema_types():
     assert validate_args(schema, args) is None
     bad = coerce_args(schema, {"ref": "four"})
     assert bad == {"ref": "four"} and validate_args(schema, bad)
+
+
+def test_a_server_that_lost_its_model_folder_counts_as_crashed():
+    from ithaca import local_servers
+
+    assert local_servers.is_crash("The local model server isn't serving “qwen3.5-4b”. Start it with …")
+    assert not local_servers.is_crash("400 from http://127.0.0.1:8080/v1: bad request")

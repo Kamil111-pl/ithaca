@@ -27,6 +27,7 @@ DEFAULTS: dict[str, Any] = {
     "agent.local_thinking": False,
     "agent.think_budget": 0,  # >0: local models think, capped at this many tokens per reply
     "apps.blender_path": "",
+    "spotify.client_id": "",  # from the user's own app at developer.spotify.com (public with PKCE)
     # Inject the most relevant memories into each turn.
     "memory.auto_recall": True,
     # auto | seatbelt | docker | off

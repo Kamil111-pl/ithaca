@@ -20,7 +20,10 @@ from . import config
 log = logging.getLogger("ithaca.local")
 _locks: dict[int, asyncio.Lock] = {}
 
-CRASH_MARKERS = ("generation thread died", "Insufficient Memory", "OutOfMemory", "503")
+# Also restart when the server can't find its model folder: after the external
+# drive is unplugged and remounted, a long-running server's working directory
+# goes stale and it starts looking for the model on Hugging Face instead.
+CRASH_MARKERS = ("generation thread died", "Insufficient Memory", "OutOfMemory", "503", "isn't serving")
 
 
 def is_crash(message: str) -> bool:
