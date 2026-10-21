@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Ithaca — private intelligence for your Mac</title>
+  <title>Ithaca: private intelligence for your Mac</title>
   <meta name="description" content="A private, local-first AI workspace for your Mac. An agent that asks before it acts, runs in a sandbox, and shows its work." />
   <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#070707" media="(prefers-color-scheme: dark)" />
-  <meta property="og:title" content="Ithaca — the AI that asks first" />
+  <meta property="og:title" content="Ithaca: the AI that asks first" />
   <meta property="og:description" content="Private. Local. Shows its work." />
   <meta property="og:image" content="https://kamil111-pl.github.io/ithaca/og.jpg" />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
@@ -52,7 +52,7 @@
       <div class="hero-copy">
         <p class="eyebrow"><span class="shimmer">Private intelligence for your Mac</span></p>
         <h1>The AI that<br />asks first.</h1>
-        <p class="lede">An agent that runs on your Mac, works in a sandbox, and waits for your yes before it does anything risky. Chat, documents, deep research, memory and voice — with a model of its own that fits on a 16&nbsp;GB MacBook.</p>
+        <p class="lede">An agent that runs on your Mac, works in a sandbox, and waits for your yes before it does anything risky. Chat, documents, deep research, memory and voice, with a model of its own that fits on a 16&nbsp;GB MacBook.</p>
         <div class="cta">
           <button class="cmd" data-copy="git clone https://github.com/Kamil111-pl/ithaca && cd ithaca && ./ithaca setup && ./ithaca start" aria-label="Copy install command">
             <span class="prompt">$</span> ./ithaca start
@@ -106,7 +106,7 @@
     <section class="block" id="features">
       <div class="head">
         <h2>One workspace. Everything stays on your Mac.</h2>
-        <p>Chats, documents, memories and settings live in a single SQLite file on your drive. Bring Claude, Ollama, LM Studio, any OpenAI-compatible server — or Ithaca’s own model.</p>
+        <p>Chats, documents, memories and settings live in a single SQLite file on your drive. Bring Claude, Ollama, LM Studio, any OpenAI-compatible server, or Ithaca’s own model.</p>
       </div>
       <div class="grid">
         <article class="card">
@@ -117,7 +117,7 @@
         <article class="card">
           <ithaca-orb state="weaving" size="32"></ithaca-orb>
           <h3>Deep research</h3>
-          <p>Plans queries, reads sources in parallel and writes a cited report — saved as a document, with a live timeline as it goes.</p>
+          <p>Plans queries, reads sources in parallel and writes a cited report, saved as a document with a live timeline as it goes.</p>
         </article>
         <article class="card">
           <ithaca-orb state="shaping" size="32"></ithaca-orb>
@@ -127,7 +127,7 @@
         <article class="card">
           <ithaca-orb state="connecting" size="32"></ithaca-orb>
           <h3>Memory</h3>
-          <p>Hybrid recall — full-text and vectors, rank-fused — brought into chat automatically. Every memory is yours to read and edit.</p>
+          <p>Hybrid recall that rank-fuses full-text and vector search, brought into chat automatically. Every memory is yours to read and edit.</p>
         </article>
         <article class="card">
           <ithaca-orb state="listening" size="32"></ithaca-orb>
@@ -137,17 +137,17 @@
         <article class="card">
           <ithaca-orb state="solving" size="32"></ithaca-orb>
           <h3>Tools &amp; MCP</h3>
-          <p>Files, shell, web, browser and Mac apps, plus any MCP server — local or remote, with OAuth. Tools load on demand to keep prompts small.</p>
+          <p>Files, shell, web, browser and Mac apps, plus any MCP server, local or remote, with OAuth. Tools load on demand to keep prompts small.</p>
         </article>
         <article class="card">
           <ithaca-orb state="composing" size="32"></ithaca-orb>
           <h3>Connected apps</h3>
-          <p>Spotify, Apple Shortcuts and app links. Ask for a song and it plays — no setup for the basics.</p>
+          <p>Spotify, Apple Shortcuts and app links. Ask for a song and it plays. No setup needed for the basics.</p>
         </article>
         <article class="card focus-card">
           <svg class="ring" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="16" /><circle class="prog" cx="20" cy="20" r="16" /></svg>
           <h3>Focus</h3>
-          <p>A Pomodoro timer with a progress ring, cycle dots, streaks and stats — and a chime when it’s time for a break.</p>
+          <p>A Pomodoro timer with a progress ring, cycle dots, streaks and stats, plus a chime when it’s time for a break.</p>
         </article>
       </div>
     </section>
@@ -157,8 +157,8 @@
       <div class="split">
         <div class="head left">
           <p class="eyebrow">Security model</p>
-          <h2>Asks first — enforced, not requested.</h2>
-          <p>Most assistants defend against prompt injection with a polite line in the system prompt. Ithaca enforces it in the runtime. Once a run has read anything from the web or an MCP server, it’s marked tainted — and from then on, writes, code execution and outbound calls need your approval.</p>
+          <h2>Asks first. Enforced, not requested.</h2>
+          <p>Most assistants defend against prompt injection with a polite line in the system prompt. Ithaca enforces it in the runtime. Once a run has read anything from the web or an MCP server, it’s marked tainted. From then on, writes, code execution and outbound calls need your approval.</p>
 
           <div class="policy">
             <div class="segmented" role="tablist" aria-label="Approval mode">
@@ -197,7 +197,7 @@
         <div class="model-copy">
           <p class="eyebrow">On-device model</p>
           <h2>A model of its own.</h2>
-          <p>One command builds <code>ithaca-local</code>: Qwen3-4B fine-tuned on Ithaca’s own agent runs, then quantized to 4 bits with DWQ. It runs — and trains — on a 16&nbsp;GB Apple Silicon Mac.</p>
+          <p>One command builds <code>ithaca-local</code>: Qwen3-4B fine-tuned on Ithaca’s own agent runs, then quantized to 4 bits with DWQ. It runs and trains on a 16&nbsp;GB Apple Silicon Mac.</p>
           <div class="stats">
             <div><span class="stat">4B</span><span class="stat-l">parameters</span></div>
             <div><span class="stat">4-bit</span><span class="stat-l">DWQ</span></div>
@@ -220,7 +220,7 @@
       <div class="eval-num"><span class="stat">100</span><span class="stat-l">agent tasks</span></div>
       <div class="head left">
         <h2>Measured, not vibed.</h2>
-        <p><code>./ithaca eval</code> runs a hundred tasks with real tools in a simulated world — web pages, Gmail and Google Docs in Chrome, Mac apps — including prompt-injection traps and approval checks. Each run is compared with the last, and a regression fails the build.</p>
+        <p><code>./ithaca eval</code> runs a hundred tasks with real tools in a simulated world (web pages, Gmail and Google Docs in Chrome, Mac apps), including prompt-injection traps and approval checks. Each run is compared with the last, and a regression fails the build.</p>
       </div>
     </section>
 
@@ -245,7 +245,7 @@
       <div class="install">
         <ithaca-orb state="breathing" size="64" px="96"></ithaca-orb>
         <h2>Bring it home.</h2>
-        <p>macOS on Apple Silicon. Clone, set up, start — then add a model in <b>Settings → Models</b>.</p>
+        <p>macOS on Apple Silicon. Clone, set up, start, then add a model in <b>Settings → Models</b>.</p>
         <div class="code">
           <div class="code-head"><span>Terminal</span><button class="chip copy" data-copy="git clone https://github.com/Kamil111-pl/ithaca
 cd ithaca

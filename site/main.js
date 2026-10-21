@@ -61,7 +61,7 @@ for (const t of tabs) { const s = $(t.getAttribute("href")); if (s) spy.observe(
 
 const POLICY = {
   smart: "The default. Reads and safe tools just run. Shell commands, writes outside the workspace, and anything outbound after reading the web stop and ask.",
-  always: "Every tool call that changes something waits for your yes — files, shell, email, MCP. Slower, and completely in your hands.",
+  always: "Every tool call that changes something waits for your yes: files, shell, email, MCP. Slower, and completely in your hands.",
   never: "For trusted local work: tools run without stopping. The sandbox still applies, and tainted runs still can’t leak data without asking.",
 };
 const policyText = $("#policy-text");
@@ -176,7 +176,7 @@ subject: What’s new in 2.4</pre>
   endActivity();
   const b = push(el(`<div class="turn"><div class="bubble"></div></div>`)).firstChild;
   await typeInto(b, allowed
-    ? "Sent. 2.4 adds offline sync, a faster search index and two security fixes — I kept it to five bullets and linked the full notes."
+    ? "Sent. 2.4 adds offline sync, a faster search index and two security fixes. I kept it to five bullets and linked the full notes."
     : "Okay, nothing was sent. Here’s the summary instead: 2.4 adds offline sync, a faster search index and two security fixes.");
   if (!alive()) return;
   replay.hidden = false;
