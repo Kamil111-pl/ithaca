@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Ithaca — private intelligence for your Mac</title>
+  <meta name="description" content="A private, local-first AI workspace for your Mac. An agent that asks before it acts, runs in a sandbox, and shows its work." />
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#070707" media="(prefers-color-scheme: dark)" />
+  <meta property="og:title" content="Ithaca — the AI that asks first" />
+  <meta property="og:description" content="Private. Local. Shows its work." />
+  <meta property="og:image" content="https://kamil111-pl.github.io/ithaca/og.jpg" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <script>
+    try { const t = localStorage.getItem("ithaca-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+  </script>
+  <script type="module" src="orbs.js"></script>
+  <script type="module" src="main.js"></script>
+</head>
+<body>
+  <header class="nav-wrap">
+    <nav class="nav">
+      <a class="brand" href="#top" aria-label="Ithaca home">
+        <ithaca-orb state="breathing" size="20" px="22"></ithaca-orb>
+        <span>Ithaca</span>
+      </a>
+      <div class="tabs" role="list">
+        <a class="tab" href="#features">Features</a>
+        <a class="tab" href="#asks-first">Security</a>
+        <a class="tab" href="#model">Model</a>
+        <a class="tab" href="#install">Install</a>
+      </div>
+      <div class="nav-end">
+        <button class="icon-btn" id="theme" aria-label="Switch theme">
+          <span class="swap">
+            <svg class="sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+            <svg class="moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11Z"/></svg>
+          </span>
+        </button>
+        <a class="btn sm primary" href="https://github.com/Kamil111-pl/ithaca">GitHub</a>
+      </div>
+    </nav>
+  </header>
+
+  <main id="top">
+    <!-- ------------------------------------------------------------ hero -->
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="shimmer">Private intelligence for your Mac</span></p>
+        <h1>The AI that<br />asks first.</h1>
+        <p class="lede">An agent that runs on your Mac, works in a sandbox, and waits for your yes before it does anything risky. Chat, documents, deep research, memory and voice — with a model of its own that fits on a 16&nbsp;GB MacBook.</p>
+        <div class="cta">
+          <button class="cmd" data-copy="git clone https://github.com/Kamil111-pl/ithaca && cd ithaca && ./ithaca setup && ./ithaca start" aria-label="Copy install command">
+            <span class="prompt">$</span> ./ithaca start
+            <span class="swap copy-ic">
+              <svg class="a" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="8" y="8" width="13" height="13" rx="3"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>
+              <svg class="b off" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+            </span>
+          </button>
+          <a class="btn ghost" href="#asks-first">How it stays safe →</a>
+        </div>
+        <p class="tagline">Private. Local. Shows its work.</p>
+      </div>
+      <div class="hero-orb" aria-hidden="true">
+        <ithaca-orb class="halo" state="breathing" size="64" px="520" speed="0.5"></ithaca-orb>
+        <ithaca-orb class="core" state="searching" size="64" px="260"></ithaca-orb>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------ stage strip -->
+    <section class="stages" aria-label="What Ithaca shows you while it works">
+      <figure><ithaca-orb state="solving" size="64"></ithaca-orb><figcaption>Thinks</figcaption></figure>
+      <figure><ithaca-orb state="searching" size="64"></ithaca-orb><figcaption>Searches</figcaption></figure>
+      <figure><ithaca-orb state="weaving" size="64"></ithaca-orb><figcaption>Researches</figcaption></figure>
+      <figure><ithaca-orb state="breathing" size="64" speed="0.45"></ithaca-orb><figcaption>Asks first</figcaption></figure>
+      <figure><ithaca-orb state="composing" size="64"></ithaca-orb><figcaption>Writes</figcaption></figure>
+    </section>
+
+    <!-- ------------------------------------------------------------- demo -->
+    <section class="block demo-block">
+      <div class="head">
+        <h2>You can always see what it’s doing.</h2>
+        <p>Each stage of a run has its own orb, so you can tell at a glance whether Ithaca is reasoning, looking something up, acting, or waiting on you. Tool calls show up as cards. Anything risky stops and asks.</p>
+      </div>
+
+      <div class="demo glass" id="demo">
+        <div class="demo-bar">
+          <span class="dots"><i></i><i></i><i></i></span>
+          <span class="chip"><ithaca-orb state="working" size="20" px="14"></ithaca-orb>ithaca-local</span>
+          <span class="spacer"></span>
+          <button class="chip" id="replay" hidden>Replay</button>
+        </div>
+        <div class="thread" id="thread" aria-live="polite"></div>
+        <div class="composer">
+          <span class="ph">Ask Ithaca anything…</span>
+          <span class="send"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- --------------------------------------------------------- features -->
+    <section class="block" id="features">
+      <div class="head">
+        <h2>One workspace. Everything stays on your Mac.</h2>
+        <p>Chats, documents, memories and settings live in a single SQLite file on your drive. Bring Claude, Ollama, LM Studio, any OpenAI-compatible server — or Ithaca’s own model.</p>
+      </div>
+      <div class="grid">
+        <article class="card">
+          <ithaca-orb state="working" size="32"></ithaca-orb>
+          <h3>Chat + agent</h3>
+          <p>Streaming agent with native tool calling, live tool cards, inline approvals and a plan it keeps updated. Runs survive closed tabs.</p>
+        </article>
+        <article class="card">
+          <ithaca-orb state="weaving" size="32"></ithaca-orb>
+          <h3>Deep research</h3>
+          <p>Plans queries, reads sources in parallel and writes a cited report — saved as a document, with a live timeline as it goes.</p>
+        </article>
+        <article class="card">
+          <ithaca-orb state="shaping" size="32"></ithaca-orb>
+          <h3>Documents</h3>
+          <p>Markdown editor with live preview and autosave. Ask it to revise a selection or the whole doc, or chat about what you’re writing.</p>
+        </article>
+        <article class="card">
+          <ithaca-orb state="connecting" size="32"></ithaca-orb>
+          <h3>Memory</h3>
+          <p>Hybrid recall — full-text and vectors, rank-fused — brought into chat automatically. Every memory is yours to read and edit.</p>
+        </article>
+        <article class="card">
+          <ithaca-orb state="listening" size="32"></ithaca-orb>
+          <h3>“Hey Ithaca”</h3>
+          <p>Say it anywhere on your Mac, or tap the mic in chat. Transcribed locally with Whisper; replies spoken aloud.</p>
+        </article>
+        <article class="card">
+          <ithaca-orb state="solving" size="32"></ithaca-orb>
+          <h3>Tools &amp; MCP</h3>
+          <p>Files, shell, web, browser and Mac apps, plus any MCP server — local or remote, with OAuth. Tools load on demand to keep prompts small.</p>
+        </article>
+        <article class="card">
+          <ithaca-orb state="composing" size="32"></ithaca-orb>
+          <h3>Connected apps</h3>
+          <p>Spotify, Apple Shortcuts and app links. Ask for a song and it plays — no setup for the basics.</p>
+        </article>
+        <article class="card focus-card">
+          <svg class="ring" viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20" r="16" /><circle class="prog" cx="20" cy="20" r="16" /></svg>
+          <h3>Focus</h3>
+          <p>A Pomodoro timer with a progress ring, cycle dots, streaks and stats — and a chime when it’s time for a break.</p>
+        </article>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------- asks first -->
+    <section class="block" id="asks-first">
+      <div class="split">
+        <div class="head left">
+          <p class="eyebrow">Security model</p>
+          <h2>Asks first — enforced, not requested.</h2>
+          <p>Most assistants defend against prompt injection with a polite line in the system prompt. Ithaca enforces it in the runtime. Once a run has read anything from the web or an MCP server, it’s marked tainted — and from then on, writes, code execution and outbound calls need your approval.</p>
+
+          <div class="policy">
+            <div class="segmented" role="tablist" aria-label="Approval mode">
+              <button role="tab" class="on" data-mode="smart">Smart</button>
+              <button role="tab" data-mode="always">Always ask</button>
+              <button role="tab" data-mode="never">Never</button>
+            </div>
+            <p class="policy-text" id="policy-text"></p>
+          </div>
+        </div>
+
+        <ul class="facts">
+          <li class="fact">
+            <span class="fact-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6l8-3Z"/></svg></span>
+            <div><b>Seatbelt sandbox</b><p>Every command runs in a macOS sandbox: writes confined to the workspace, your home folder unreadable, no network unless you approve it.</p></div>
+          </li>
+          <li class="fact">
+            <span class="fact-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4"/><circle cx="12" cy="12" r="3"/></svg></span>
+            <div><b>Taint tracking</b><p>Web and MCP content is wrapped as untrusted. Memories saved in a tainted run are replayed as data, never as instructions.</p></div>
+          </li>
+          <li class="fact">
+            <span class="fact-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span>
+            <div><b>Local by default</b><p>Bound to 127.0.0.1 with a password, strict cookies, CSRF and DNS-rebinding guards. Fetches to private addresses are blocked at every redirect.</p></div>
+          </li>
+          <li class="fact">
+            <span class="fact-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span>
+            <div><b>Append-only history</b><p>Every step lands in an event log. Runs replay byte-for-byte, so what you saw is what happened.</p></div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------ model -->
+    <section class="block" id="model">
+      <div class="model glass">
+        <div class="model-copy">
+          <p class="eyebrow">On-device model</p>
+          <h2>A model of its own.</h2>
+          <p>One command builds <code>ithaca-local</code>: Qwen3-4B fine-tuned on Ithaca’s own agent runs, then quantized to 4 bits with DWQ. It runs — and trains — on a 16&nbsp;GB Apple Silicon Mac.</p>
+          <div class="stats">
+            <div><span class="stat">4B</span><span class="stat-l">parameters</span></div>
+            <div><span class="stat">4-bit</span><span class="stat-l">DWQ</span></div>
+            <div><span class="stat">2.3 GB</span><span class="stat-l">on disk</span></div>
+          </div>
+        </div>
+        <ol class="pipeline" id="pipeline">
+          <li><span class="dot"></span><div><b>Distill</b><small>An open-weight teacher drives Ithaca’s real agent loop</small></div></li>
+          <li><span class="dot"></span><div><b>Data</b><small>Teacher runs + Hermes function calling + everyday chat</small></div></li>
+          <li><span class="dot"></span><div><b>Train</b><small>LoRA on a 4-bit base, gradient checkpointing</small></div></li>
+          <li><span class="dot"></span><div><b>Fuse</b><small>Back into the full-precision base</small></div></li>
+          <li><span class="dot"></span><div><b>Quantize</b><small>The fused model teaches its own 4-bit copy</small></div></li>
+          <li><span class="dot"></span><div><b>Serve</b><small>OpenAI-compatible, with tool calling, on :8080</small></div></li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ------------------------------------------------------------ evals -->
+    <section class="block evals">
+      <div class="eval-num"><span class="stat">100</span><span class="stat-l">agent tasks</span></div>
+      <div class="head left">
+        <h2>Measured, not vibed.</h2>
+        <p><code>./ithaca eval</code> runs a hundred tasks with real tools in a simulated world — web pages, Gmail and Google Docs in Chrome, Mac apps — including prompt-injection traps and approval checks. Each run is compared with the last, and a regression fails the build.</p>
+      </div>
+    </section>
+
+    <!-- -------------------------------------------------------------- why -->
+    <section class="block" id="why">
+      <div class="head">
+        <h2>Built small, on purpose.</h2>
+        <p>Ithaca is a ground-up redesign of Odysseus. In the Odyssey, Ithaca is where Odysseus was trying to get home to.</p>
+      </div>
+      <div class="compare glass thin">
+        <div class="row hd"><span>Before</span><span>Ithaca</span></div>
+        <div class="row"><span>Tool calls parsed from prose with a dozen regex formats</span><span>Native tool calling, probed once per model and remembered</span></div>
+        <div class="row"><span>Keyword lists decide which tools a turn gets</span><span>Three core tools; the model searches for the rest</span></div>
+        <div class="row"><span>Shell runs as you, unsandboxed</span><span>Seatbelt or Docker on every command</span></div>
+        <div class="row"><span>SQLite, JSON files and a vector DB</span><span>One SQLite file, numbered migrations</span></div>
+        <div class="row"><span>6k-line agent loop, 41k-line stylesheet</span><span>~420-line loop, token-based design system</span></div>
+      </div>
+    </section>
+
+    <!-- ---------------------------------------------------------- install -->
+    <section class="block" id="install">
+      <div class="install">
+        <ithaca-orb state="breathing" size="64" px="96"></ithaca-orb>
+        <h2>Bring it home.</h2>
+        <p>macOS on Apple Silicon. Clone, set up, start — then add a model in <b>Settings → Models</b>.</p>
+        <div class="code">
+          <div class="code-head"><span>Terminal</span><button class="chip copy" data-copy="git clone https://github.com/Kamil111-pl/ithaca
+cd ithaca
+./ithaca setup
+./ithaca start">Copy</button></div>
+<pre><code><span class="c">git clone</span> https://github.com/Kamil111-pl/ithaca
+<span class="c">cd</span> ithaca
+<span class="c">./ithaca setup</span>   <span class="cm"># Python env + web build, first run only</span>
+<span class="c">./ithaca start</span>   <span class="cm"># → http://127.0.0.1:7100</span></code></pre>
+        </div>
+        <div class="cta center">
+          <a class="btn primary" href="https://github.com/Kamil111-pl/ithaca">View on GitHub</a>
+          <a class="btn" href="https://github.com/Kamil111-pl/ithaca/blob/main/model/README.md">Build the model</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span class="brand"><ithaca-orb state="breathing" size="20" px="18"></ithaca-orb> Ithaca</span>
+    <span class="faint">Orbs by <a href="https://github.com/Jakubantalik/thinking-orbs">thinking-orbs</a> (MIT).</span>
+    <span class="spacer"></span>
+    <a class="faint" href="https://github.com/Kamil111-pl/ithaca/blob/main/NOTICE.md">Notices</a>
+    <a class="faint" href="https://github.com/Kamil111-pl/ithaca">GitHub</a>
+  </footer>
+</body>
+</html>
